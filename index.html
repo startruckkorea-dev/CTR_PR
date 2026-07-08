@@ -586,8 +586,9 @@ let accLines = [];     // {itemDesc, gl, glName, cctr, cctrName, amount, isVat}
 let prFiles = [];
 let currentGlLineIdx = null, currentCcLineIdx = null;
 
-// ── G/L 마스터 (F&C Controlling Template 기준, 2026-07 추출) ──
-const GL_LIST = [
+// ── G/L 마스터: acc_voucher와 동일한 acc_voucher_COA_PC.xlsx를 실시간으로 읽어옴 (loadGLMaster) ──
+// 아래는 로드 실패 시에만 쓰이는 최소 폴백 목록
+let GL_LIST = [
   {code:'210303',altCode:'492820',name:'Accr_charges : Local Contents'},
   {code:'210710',altCode:'492370',name:'Provision : Service Commission'},
   {code:'119332',altCode:'499210',name:'Goods recieved / Invoice Recieved: Asset'},
@@ -607,8 +608,43 @@ const GL_LIST = [
   {code:'730102',altCode:'671010',name:'Income taxes of prior year'},
   {code:'210703',altCode:'165920',name:'Provision: Expat Repatriation Expense'},
 ];
+const COA_PC_FILE_NAME = 'acc_voucher_COA_PC.xlsx'; // ACC Voucher와 동일한 GL 마스터 파일 재사용
 const VAT_GL = {code:'411010', name:'VAT Recoverable'};
 let COST_CENTERS = [];
+
+// ── G/L 마스터 실시간 로드 (acc_voucher_COA_PC.xlsx, STK-DB 사이트 루트) ──
+async function loadGLMaster() {
+  try {
+    const t = await token();
+    if(!siteId) { const s=await api('/sites/'+SITE_PATH_DB); siteId=s.id; }
+    const res = await fetch(GRAPH+'/sites/'+siteId+'/drive/root:/'+encodeURIComponent(COA_PC_FILE_NAME)+':/content',
+      {headers:{Authorization:'Bearer '+t}});
+    if(!res.ok) throw new Error(COA_PC_FILE_NAME+' HTTP '+res.status);
+    const buf = await res.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array', cellDates:false});
+    // COA 시트: row0=병합헤더, row1=컬럼헤더, row2~=데이터. C열=New GL, D열=Legacy GL, E열=Description, G열='O'=검색 상단고정
+    const coaRows = XLSX.utils.sheet_to_json(wb.Sheets['COA'], {header:1});
+    const newGL = [];
+    for(let i=2;i<coaRows.length;i++){
+      const r = coaRows[i]; if(!r) continue;
+      const glNew = (r[2]!=null?r[2]:'').toString().trim();
+      const glOld = (r[3]!=null?r[3]:'').toString().trim();
+      const glName = (r[4]||'').toString().trim();
+      const mainFlag = (r[6]||'').toString().trim().toUpperCase()==='O';
+      if(!glName) continue;
+      const code = /^\d+$/.test(glNew) ? glNew : (/^\d+$/.test(glOld) ? glOld : '');
+      if(!code) continue;
+      if(newGL.find(g=>g.code===code)) continue;
+      newGL.push({code, altCode:(/^\d+$/.test(glOld)&&glOld!==code?glOld:''), name:glName, mainFlag});
+    }
+    newGL.sort((a,b)=>(b.mainFlag - a.mainFlag));
+    if(newGL.length){ GL_LIST = newGL; }
+    console.log('[COA_PC] GL 로드 완료:', GL_LIST.length);
+    if(document.getElementById('gl-modal')?.classList.contains('open')) renderGlResults(GL_LIST);
+  } catch(e) {
+    console.warn('[COA_PC] GL 로드 실패, 폴백 목록 사용:', e.message);
+  }
+}
 
 // PR 결재 매트릭스 (F&C Controlling PR 양식 기준: Team Leader/Dept Head는 소액, CEO/RD/CFO는 고액 에스컬레이션, Budget Controller/Controlling Manager는 항상 필수)
 const APPROVAL_RULES = {
@@ -738,6 +774,7 @@ async function boot(account) {
 
   loadCCTRMaster(account.name).catch(e=>console.warn('CCTR 로드 실패:', e.message));
   loadBPMaster().catch(e=>console.warn('BP 마스터 로드 실패:', e.message));
+  loadGLMaster().catch(e=>console.warn('GL 마스터 로드 실패:', e.message));
 
   loadSystemConfig().then(cfg=>{
     if(!cfg) return;
