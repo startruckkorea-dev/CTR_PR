@@ -233,7 +233,14 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
   <!-- ── PR 작성 ── -->
   <div id="tab-new">
     <div class="card">
-      <div class="card-title">1. 기본 정보</div>
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;row-gap:8px">
+        <span>1. 기본 정보 <span id="pr-id-badge" style="font-size:11px;font-weight:400;color:#a19f9d"></span></span>
+        <div style="display:flex;align-items:center;gap:6px;font-weight:400">
+          <span style="font-size:.72rem;color:#0078d4;font-weight:600;white-space:nowrap">기존 PR 불러오기</span>
+          <input type="text" id="load-pr-id" placeholder="예: CTR-PR-20**-**-**_ID-**" style="width:220px;border:1px solid #d2d0ce;border-radius:4px;padding:5px 9px;font-size:.74rem">
+          <button onclick="loadExistingPR()" style="padding:5px 12px;border:none;border-radius:4px;background:#0078d4;color:#fff;font-size:.74rem;cursor:pointer;white-space:nowrap">📥 불러오기</button>
+        </div>
+      </div>
       <div class="form-row three">
         <div class="form-group">
           <label>Submission Date</label>
@@ -927,7 +934,7 @@ function renderAccLines(){
         </div>
       </td>
       <td><input type="text" value="${l.amount?Number(l.amount).toLocaleString():''}" style="text-align:right" ${l.isVat?'':'oninput="fmtInput(this);accLines['+i+'].amount=parseComma(this.value);calcAccTotal()"'} ${l.isVat?'readonly':''}></td>
-      <td>${l.isVat?'':`<button class="btn-del" onclick="deleteAccLine(${i})">✕</button>`}</td>
+      <td><button class="btn-del" onclick="deleteAccLine(${i})" title="${l.isVat?'VAT 라인 제거':'삭제'}">✕</button></td>
     </tr>`).join('') + `<tr><td colspan="6" style="border:none;padding-top:8px"><button class="btn-add" onclick="addVatLine()">+ VAT 라인 자동추가 (10%)</button></td></tr>`;
   calcAccTotal();
 }
@@ -1117,10 +1124,61 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if(catEl) catEl.addEventListener('change', renderApprovalPreview);
 });
 
+// ── 기존 PR 불러오기 (첨부파일 제외, ACC Voucher와 동일 패턴) ──
+async function loadExistingPR() {
+  const titleInput = document.getElementById('load-pr-id');
+  const titleVal = (titleInput.value||'').trim();
+  if(!titleVal) { alert('불러올 PR ID(CTR-PR-YYYY-MM-DD_ID-N)를 입력하세요.'); return; }
+  if(!siteId){ try{ const s=await api('/sites/'+SITE_PATH_DB); siteId=s.id; }catch(e){ showAlert('오류','SharePoint 사이트 접근에 실패했습니다.','⚠️'); return; } }
+  try {
+    const data = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items?$expand=fields&$filter=fields/Title eq '${titleVal}'&$top=5`);
+    if(!data.value.length){ showAlert('PR을 찾을 수 없습니다', titleVal, '⚠️'); return; }
+    const f = data.value[0].fields;
+
+    document.getElementById('v-category').value = f.PurchaseCategory||'';
+    document.getElementById('v-dept').value = f.Department||'';
+    document.getElementById('v-phone-ext').value = f.PhoneExt||'';
+
+    document.getElementById('v-vendor-type').value = f.VendorType==='new' ? 'new' : 'existing';
+    toggleVendorType();
+    if(f.VendorType==='new'){
+      document.getElementById('v-vendor-new-name').value = f.VendorName||'';
+      document.getElementById('v-vendor-new-addr').value = f.VendorAddress||'';
+      document.getElementById('v-vendor-new-tel').value = f.VendorTel||'';
+      document.getElementById('v-vendor-new-fax').value = f.VendorFax||'';
+    } else {
+      document.getElementById('v-vendor-code').value = f.VendorNo||'';
+      document.getElementById('v-vendor-name').value = f.VendorName||'';
+      document.getElementById('v-vendor-tel').value = f.VendorTel||'';
+      document.getElementById('v-vendor-bizno').value = f.VendorBizNo||'';
+    }
+
+    const remarksArr = (f.Remarks||'').split(';').map(s=>s.trim()).filter(Boolean);
+    document.getElementById('r-onetime').checked = remarksArr.includes('Onetime payment');
+    document.getElementById('r-partial').checked = remarksArr.includes('Partial payment');
+    document.getElementById('r-po').checked = remarksArr.includes('PO Required');
+    document.getElementById('r-gr').checked = remarksArr.includes('GR Required');
+
+    try { goodsLines = JSON.parse(f.GoodsJSON||'[]'); } catch(e){ goodsLines=[]; }
+    if(!goodsLines.length) goodsLines = [{desc:'',quotation:'',qty:1,amount:0}];
+    try { accLines = JSON.parse(f.AccountLinesJSON||'[]'); } catch(e){ accLines=[]; }
+    if(!accLines.length) accLines = [{itemDesc:'',gl:'',glName:'',cctr:'',cctrName:'',amount:0,isVat:false}];
+
+    renderGoodsLines(); renderAccLines(); renderFileList(); renderApprovalPreview();
+    document.getElementById('pr-id-badge').textContent = `(${titleVal} 기반 불러옴)`;
+    titleInput.value = '';
+    showAlert('PR을 불러왔습니다.', '첨부파일은 새로 첨부해주세요.', '✅');
+  } catch(e) {
+    console.error('loadExistingPR error:', e);
+    showAlert('PR 불러오기 실패', e.message, '⚠️');
+  }
+}
+
 function resetForm(){
   goodsLines = [{desc:'',quotation:'',qty:1,amount:0}];
   accLines = [{itemDesc:'',gl:'',glName:'',cctr:'',cctrName:'',amount:0,isVat:false}];
   prFiles = [];
+  document.getElementById('pr-id-badge').textContent='';
   document.getElementById('v-category').value='';
   document.getElementById('v-dept').value='';
   document.getElementById('v-phone-ext').value='';
@@ -1129,6 +1187,10 @@ function resetForm(){
   document.getElementById('v-vendor-name').value='';
   document.getElementById('v-vendor-tel').value='';
   document.getElementById('v-vendor-bizno').value='';
+  document.getElementById('v-vendor-new-name').value='';
+  document.getElementById('v-vendor-new-addr').value='';
+  document.getElementById('v-vendor-new-tel').value='';
+  document.getElementById('v-vendor-new-fax').value='';
   ['r-onetime','r-partial','r-po','r-gr'].forEach(id=>document.getElementById(id).checked=false);
   toggleVendorType();
   renderGoodsLines(); renderAccLines(); renderFileList(); renderApprovalPreview();
