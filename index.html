@@ -93,6 +93,10 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
 .appr-block.appr-fixed { background:#f0f6ff; border-color:#c7e0f4; }
 .appr-block-title { font-size:12px; font-weight:700; color:#323130; margin-bottom:10px; }
 .appr-block-title .hint { font-weight:400; color:#605e5c; margin-left:4px; }
+.appr-block-title .req-mark { color:#d83b01; }
+.appr-info { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+.appr-info input { padding:7px 10px; border:1px solid #d2d0ce; border-radius:4px; font-size:12px; font-family:inherit; background:#faf9f8; color:#323130; box-sizing:border-box; }
+.appr-info input[readonly] { background:#f3f2f1; color:#605e5c; }
 .appr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px,1fr)); gap: 10px; }
 .appr-box { border: 1px solid #edebe9; border-radius: 6px; overflow: hidden; }
 .appr-box .ah { background: #f3f2f1; padding: 5px 10px; font-size: 11px; font-weight: 600; color: #605e5c; }
@@ -425,7 +429,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
       <div class="appr-preview-strip" id="appr-line-preview" style="display:none">
         <div id="appr-line-preview-content"></div>
       </div>
-      <div class="appr-grid" id="appr-preview"></div>
+      <div id="appr-preview"></div>
     </div>
 
     <div class="btn-row">
@@ -1168,16 +1172,23 @@ function renderApprovalPreview(){
     `</div>`;
 
   el.innerHTML = approvers.map(a=>{
-    if(!a.fixed){
-      return `<div class="appr-box"><div class="ah">${a.order}차 · ${a.label} <span class="ar" style="margin-left:3px">직접입력</span></div><div class="ab">
-        <input type="text" id="dyn-${a.role}-name" placeholder="이름" value="${escAttr(a.name==='TBD'?'':a.name)}" style="width:100%;margin-bottom:4px;padding:5px 6px;font-size:12px;border:1px solid #d2d0ce;border-radius:3px;box-sizing:border-box" oninput="renderApprovalPreview()">
-        <input type="text" id="dyn-${a.role}-email" placeholder="이메일" value="${escAttr(a.email)}" style="width:100%;padding:5px 6px;font-size:11px;border:1px solid #d2d0ce;border-radius:3px;box-sizing:border-box" oninput="renderApprovalPreview()">
-      </div></div>`;
+    const fixedTag = a.fixed
+      ? `<span style="font-size:10px;color:#107c10;background:#dff6dd;border-radius:10px;padding:1px 6px;margin-left:4px">자동 지정</span>`
+      : `<span style="font-size:10px;color:#8a6914;background:#fff4ce;border-radius:10px;padding:1px 6px;margin-left:4px">직접 입력</span>`;
+    if(a.fixed){
+      return `<div class="appr-block appr-fixed">
+        <div class="appr-block-title">${a.order}차 결재자${fixedTag} <span class="hint">— ${a.label}</span></div>
+        <div class="appr-info">
+          <input type="text"  value="${escAttr(a.name||'(미설정)')}"  readonly placeholder="이름">
+          <input type="email" value="${escAttr(a.email)}" readonly placeholder="이메일 (config 미설정 시 비어있음)">
+        </div></div>`;
     }
-    return `<div class="appr-box"><div class="ah">${a.order}차 · ${a.label} <span class="ar" style="margin-left:3px">고정</span></div><div class="ab">
-      <div class="an">${a.name||'(미설정)'}</div>
-      <div class="ad">${a.email||'<span style="color:#a4262c">config 미설정</span>'}</div>
-    </div></div>`;
+    return `<div class="appr-block">
+      <div class="appr-block-title">${a.order}차 결재자 <span class="req-mark">*</span>${fixedTag} <span class="hint">— ${a.label}</span></div>
+      <div class="appr-info">
+        <input type="text"  id="dyn-${a.role}-name"  placeholder="이름" value="${escAttr(a.name==='TBD'?'':a.name)}" oninput="renderApprovalPreview()">
+        <input type="email" id="dyn-${a.role}-email" placeholder="이메일" value="${escAttr(a.email)}" oninput="renderApprovalPreview()">
+      </div></div>`;
   }).join('');
 }
 function onCategoryOrAmountChange(){ renderApprovalPreview(); }
