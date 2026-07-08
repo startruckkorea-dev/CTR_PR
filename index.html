@@ -1169,7 +1169,7 @@ function renderApprovalPreview(){
 
   strip.style.display='block';
   stripContent.innerHTML =
-    `<div style="font-weight:600;color:#0078d4;margin-bottom:6px">📋 결재 라인 (금액 기준 자동 구성)</div>`+
+    `<div style="font-weight:600;color:#0078d4;margin-bottom:6px;font-size:.8rem">📋 결재 라인 (금액 기준 자동 구성)</div>`+
     `<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">`+
     approvers.map((a,i)=>
       `<span class="line-step"><span class="line-step-badge ${a.fixed?'fixed':''}">${a.order}차</span><span style="font-size:.75rem">${a.label}</span>${i<approvers.length-1?'<span class="line-arrow">→</span>':''}</span>`
