@@ -100,6 +100,11 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
 .appr-box .an { font-weight: 600; font-size: 12px; color: #323130; }
 .appr-box .ad { font-size: 11px; color: #a19f9d; margin: 2px 0 5px; }
 .appr-box .ar { font-size: 10px; background: #e1f0ff; color: #0078d4; padding: 1px 6px; border-radius: 10px; display: inline-block; }
+.line-step { display:inline-flex; align-items:center; gap:4px; margin-right:4px; }
+.line-step-badge { background:#0078d4; color:#fff; border-radius:10px; padding:1px 8px; font-size:11px; font-weight:700; }
+.line-step-badge.fixed { background:#107c10; }
+.line-arrow { color:#a19f9d; font-size:13px; }
+.appr-preview-strip { background:#f0f6ff; border:1px solid #c7e0f4; border-radius:6px; padding:10px 14px; margin-bottom:14px; }
 .badge-req { background: #fff4ce; color: #7d5700; border: 1px solid #ffe58f; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; display: inline-block; margin-top: 5px; }
 .badge-na  { background: #f3f2f1; color: #a19f9d; border: 1px solid #edebe9; font-size: 10px; padding: 2px 7px; border-radius: 10px; display: inline-block; margin-top: 5px; font-style: italic; }
 .appr-select-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:8px; }
@@ -417,6 +422,9 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
 
     <div class="card">
       <div class="card-title">8. Authorization (결재라인 미리보기)</div>
+      <div class="appr-preview-strip" id="appr-line-preview" style="display:none">
+        <div id="appr-line-preview-content"></div>
+      </div>
       <div class="appr-grid" id="appr-preview"></div>
     </div>
 
@@ -1103,18 +1111,35 @@ function buildApprovers(){
 }
 function renderApprovalPreview(){
   const approvers = buildApprovers();
+  const strip = document.getElementById('appr-line-preview');
+  const stripContent = document.getElementById('appr-line-preview-content');
   const el = document.getElementById('appr-preview');
-  if(!approvers.length){ el.innerHTML='<div style="color:#a19f9d;font-size:12px">금액을 입력하면 결재라인이 표시됩니다.</div>'; return; }
+
+  if(!approvers.length){
+    strip.style.display='none';
+    el.innerHTML='<div style="color:#a19f9d;font-size:12px">Purchase Category와 금액을 입력하면 결재라인이 표시됩니다.</div>';
+    return;
+  }
+
+  strip.style.display='block';
+  stripContent.innerHTML =
+    `<div style="font-weight:600;color:#0078d4;margin-bottom:6px">📋 결재 라인 (금액 기준 자동 구성)</div>`+
+    `<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">`+
+    approvers.map((a,i)=>
+      `<span class="line-step"><span class="line-step-badge ${a.fixed?'fixed':''}">${a.order}차</span><span style="font-size:.75rem">${a.label}</span>${i<approvers.length-1?'<span class="line-arrow">→</span>':''}</span>`
+    ).join('')+
+    `</div>`;
+
   el.innerHTML = approvers.map(a=>{
     if(!a.fixed){
-      return `<div class="appr-box"><div class="ah">${a.order}차 · ${a.label}</div><div class="ab">
-        <input type="text" id="dyn-${a.role}-name" placeholder="이름" value="${escAttr(a.name==='TBD'?'':a.name)}" style="width:100%;margin-bottom:4px;padding:5px 6px;font-size:12px;border:1px solid #d2d0ce;border-radius:3px" oninput="renderApprovalPreview()">
-        <input type="text" id="dyn-${a.role}-email" placeholder="이메일" value="${escAttr(a.email)}" style="width:100%;padding:5px 6px;font-size:11px;border:1px solid #d2d0ce;border-radius:3px" oninput="renderApprovalPreview()">
+      return `<div class="appr-box"><div class="ah">${a.order}차 · ${a.label} <span class="ar" style="margin-left:3px">직접입력</span></div><div class="ab">
+        <input type="text" id="dyn-${a.role}-name" placeholder="이름" value="${escAttr(a.name==='TBD'?'':a.name)}" style="width:100%;margin-bottom:4px;padding:5px 6px;font-size:12px;border:1px solid #d2d0ce;border-radius:3px;box-sizing:border-box" oninput="renderApprovalPreview()">
+        <input type="text" id="dyn-${a.role}-email" placeholder="이메일" value="${escAttr(a.email)}" style="width:100%;padding:5px 6px;font-size:11px;border:1px solid #d2d0ce;border-radius:3px;box-sizing:border-box" oninput="renderApprovalPreview()">
       </div></div>`;
     }
-    return `<div class="appr-box"><div class="ah">${a.order}차 · ${a.label}</div><div class="ab">
+    return `<div class="appr-box"><div class="ah">${a.order}차 · ${a.label} <span class="ar" style="margin-left:3px">고정</span></div><div class="ab">
       <div class="an">${a.name||'(미설정)'}</div>
-      <div class="ad">${a.email||'<span style=\"color:#a4262c\">config 미설정</span>'}</div>
+      <div class="ad">${a.email||'<span style="color:#a4262c">config 미설정</span>'}</div>
     </div></div>`;
   }).join('');
 }
