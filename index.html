@@ -1262,6 +1262,9 @@ function switchTab(tab){
     const btn = document.getElementById('tab-'+t+'-btn');
     if(btn) btn.classList.toggle('active', t===tab);
   });
+  // PR 작성은 좁은 너비, 목록/결재함/관리자는 넓은 레이아웃 (ACC Voucher/GW 동일)
+  const appEl = document.getElementById('app');
+  if(appEl) appEl.style.maxWidth = tab==='new' ? '960px' : '1280px';
   if(tab==='list') loadMyList();
   if(tab==='appr') loadApprovalQueue();
   if(tab==='admin') loadAdminList();
