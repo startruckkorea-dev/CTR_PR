@@ -242,7 +242,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
   <!-- ── PR 작성 ── -->
   <div id="tab-new">
     <div class="card">
-      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;row-gap:8px">
+      <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;row-gap:8px">
         <span>1. 기본 정보 <span id="pr-id-badge" style="font-size:11px;font-weight:400;color:#a19f9d"></span></span>
         <div style="display:flex;align-items:center;gap:6px;font-weight:400">
           <span style="font-size:.72rem;color:#0078d4;font-weight:600;white-space:nowrap">기존 PR 불러오기</span>
@@ -273,7 +273,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
     </div>
 
     <div class="card">
-      <div class="card-title">2. Description of Goods</div>
+      <div class="section-title">2. Description of Goods</div>
       <div class="lines-header">
         <span style="font-size:12px;color:#605e5c">품목/견적/수량/금액을 입력하세요</span>
         <button class="btn-add" onclick="addGoodsLine()">+ 라인 추가</button>
@@ -297,7 +297,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
     </div>
 
     <div class="card">
-      <div class="card-title">3. Requester Info</div>
+      <div class="section-title">3. Requester Info</div>
       <div class="form-row four">
         <div class="form-group">
           <label>Name <span class="auto-tag">자동</span></label>
@@ -319,7 +319,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
     </div>
 
     <div class="card">
-      <div class="card-title">4. Accounting Information</div>
+      <div class="section-title">4. Accounting Information</div>
       <div class="lines-header">
         <span style="font-size:12px;color:#605e5c">G/L Account · Cost Center · 금액을 입력하세요 (VAT 라인은 자동 추가)</span>
         <button class="btn-add" onclick="addAccLine()">+ 라인 추가</button>
@@ -344,7 +344,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
     </div>
 
     <div class="card">
-      <div class="card-title">5. Vendor Details</div>
+      <div class="section-title">5. Vendor Details</div>
       <div class="form-row">
         <div class="form-group">
           <label>Vendor Type</label>
@@ -405,7 +405,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
     </div>
 
     <div class="card">
-      <div class="card-title">6. Remarks</div>
+      <div class="section-title">6. Remarks</div>
       <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:#323130">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="r-onetime"> Onetime payment</label>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="r-partial"> Partial payment (For partial payment, please attach the "installment table")</label>
@@ -416,16 +416,17 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
     </div>
 
     <div class="card">
-      <div class="card-title">7. 첨부파일 (최대 20MB)</div>
+      <div class="section-title">7. 첨부파일</div>
+      <div style="font-size:12px;color:#605e5c;margin-bottom:8px">Quotation, installment table 등을 첨부해주세요. (최대 20MB)</div>
       <div class="file-area" onclick="document.getElementById('v-file-input').click()">
         <input type="file" id="v-file-input" multiple onchange="onFileSelect(event)">
-        <div class="hint">📎 클릭하여 파일 첨부 (Quotation, installment table 등)</div>
+        <div class="hint">📎 클릭하여 파일 첨부 (최대 20MB)</div>
       </div>
       <div class="file-list" id="file-list"></div>
     </div>
 
     <div class="card">
-      <div class="card-title">8. Authorization (결재라인 미리보기)</div>
+      <div class="section-title">8. Authorization (결재라인 미리보기)</div>
       <div class="appr-preview-strip" id="appr-line-preview" style="display:none">
         <div id="appr-line-preview-content"></div>
       </div>
