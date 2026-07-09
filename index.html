@@ -454,8 +454,8 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
         <input type="text" id="f-search" placeholder="PR ID, 품목 검색..." oninput="renderList()">
       </div>
       <table class="list-table">
-        <thead><tr><th>PR ID</th><th>Category</th><th>제출일</th><th>금액(KRW)</th><th>진행</th><th>상태</th><th></th></tr></thead>
-        <tbody id="list-body"><tr><td colspan="7" class="list-empty">불러오는 중...</td></tr></tbody>
+        <thead><tr><th style="width:44px;text-align:center">No</th><th>PR ID</th><th>Category</th><th>제출일</th><th>금액(KRW)</th><th>진행</th><th>상태</th><th></th></tr></thead>
+        <tbody id="list-body"><tr><td colspan="8" class="list-empty">불러오는 중...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -465,8 +465,8 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
     <div class="card">
       <div class="card-title">결재함</div>
       <table class="list-table">
-        <thead><tr><th>PR ID</th><th>Category</th><th>신청자</th><th>금액(KRW)</th><th>차수</th><th>상태</th></tr></thead>
-        <tbody id="appr-body"><tr><td colspan="6" class="list-empty">불러오는 중...</td></tr></tbody>
+        <thead><tr><th style="width:44px;text-align:center">No</th><th>PR ID</th><th>Category</th><th>신청자</th><th>금액(KRW)</th><th>차수</th><th>상태</th><th></th></tr></thead>
+        <tbody id="appr-body"><tr><td colspan="8" class="list-empty">불러오는 중...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -489,8 +489,8 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
         <input type="text" id="admin-f-search" placeholder="PR ID, 신청자, 품목 검색..." oninput="renderAdminList()">
       </div>
       <table class="list-table">
-        <thead><tr><th>PR ID</th><th>신청자</th><th>Category</th><th>제출일</th><th>금액(KRW)</th><th>상태</th></tr></thead>
-        <tbody id="admin-body"><tr><td colspan="6" class="list-empty">불러오는 중...</td></tr></tbody>
+        <thead><tr><th style="width:44px;text-align:center">No</th><th>PR ID</th><th>신청자</th><th>Category</th><th>제출일</th><th>금액(KRW)</th><th>상태</th></tr></thead>
+        <tbody id="admin-body"><tr><td colspan="7" class="list-empty">불러오는 중...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -1483,8 +1483,8 @@ function switchTab(tab){
 // ── 내 신청서 목록 ──
 async function loadMyList(){
   const tbody = document.getElementById('list-body');
-  if(!siteId){ tbody.innerHTML='<tr><td colspan="7" class="list-empty">SharePoint 사이트 접근 권한이 없습니다. IT 담당자에게 문의하세요.</td></tr>'; return; }
-  tbody.innerHTML = '<tr><td colspan="7" class="list-empty">불러오는 중...</td></tr>';
+  if(!siteId){ tbody.innerHTML='<tr><td colspan="8" class="list-empty">SharePoint 사이트 접근 권한이 없습니다. IT 담당자에게 문의하세요.</td></tr>'; return; }
+  tbody.innerHTML = '<tr><td colspan="8" class="list-empty">불러오는 중...</td></tr>';
   try {
     const data = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items?$expand=fields&$top=999`);
     myListCache = data.value
@@ -1492,7 +1492,7 @@ async function loadMyList(){
       .map(it=>({...it.fields, _spId:it.id}))
       .sort((a,b)=>b._spId-a._spId);
     renderList();
-  } catch(e){ tbody.innerHTML='<tr><td colspan="7" class="list-empty">'+e.message+'</td></tr>'; }
+  } catch(e){ tbody.innerHTML='<tr><td colspan="8" class="list-empty">'+e.message+'</td></tr>'; }
 }
 function _wdBtnList(spId, status){
   if(status!=='대기') return '';
@@ -1505,9 +1505,10 @@ function renderList(){
   if(st) list = list.filter(v=>v.Status===st);
   if(kw) list = list.filter(v=>(v.Title||'').toLowerCase().includes(kw)||(v.PurchaseCategory||'').toLowerCase().includes(kw));
   const tbody = document.getElementById('list-body');
-  if(!list.length){ tbody.innerHTML='<tr><td colspan="7" class="list-empty">신청 내역이 없습니다.</td></tr>'; return; }
-  tbody.innerHTML = list.map(v=>`
+  if(!list.length){ tbody.innerHTML='<tr><td colspan="8" class="list-empty">신청 내역이 없습니다.</td></tr>'; return; }
+  tbody.innerHTML = list.map((v,idx)=>`
     <tr onclick="openDetail('${v._spId}','list')">
+      <td style="text-align:center;color:#0078d4;font-weight:600">${idx+1}</td>
       <td>${v.Title||'-'}</td>
       <td>${v.PurchaseCategory||'-'}</td>
       <td>${(v.SubmittedDate||'').slice(0,10)||'-'}</td>
@@ -1531,33 +1532,47 @@ async function checkApprovalBadge(){
 }
 async function loadApprovalQueue(){
   const tbody = document.getElementById('appr-body');
-  if(!siteId){ tbody.innerHTML='<tr><td colspan="6" class="list-empty">SharePoint 사이트 접근 권한이 없습니다.</td></tr>'; return; }
-  tbody.innerHTML = '<tr><td colspan="6" class="list-empty">불러오는 중...</td></tr>';
+  if(!siteId){ tbody.innerHTML='<tr><td colspan="8" class="list-empty">SharePoint 사이트 접근 권한이 없습니다.</td></tr>'; return; }
+  tbody.innerHTML = '<tr><td colspan="8" class="list-empty">불러오는 중...</td></tr>';
   try {
     const [apprData, reqData] = await Promise.all([
       apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$top=999`),
       apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items?$expand=fields&$top=999`)
     ]);
     const reqMap = {}; reqData.value.forEach(r=>reqMap[r.id]=r.fields);
-    apprQueueCache = apprData.value
-      .filter(it=>isMe(it.fields.ApproverEmail))
+    // 지금 내가 실제로 처리할 수 있는(Status='대기') 건만 표시 — '대기(잠김)'인 이후 차수는 결재함에 노출하지 않음
+    // 같은 PR에서 내가 여러 차수를 담당하도록 지정된 경우, 가장 먼저 처리해야 할 한 건만 남김(중복행 방지)
+    const myPending = apprData.value.filter(it=>isMe(it.fields.ApproverEmail) && it.fields.Status==='대기');
+    const dedup = {};
+    myPending.forEach(it=>{
+      const rid = String(it.fields.RequestID);
+      if(!dedup[rid] || it.fields.ApprovalOrder < dedup[rid].fields.ApprovalOrder) dedup[rid] = it;
+    });
+    apprQueueCache = Object.values(dedup)
       .map(it=>({...it.fields, _apId:it.id, _req:reqMap[it.fields.RequestID]}))
       .filter(x=>x._req)
       .sort((a,b)=>b.RequestID-a.RequestID);
     renderApprovalQueue();
-  } catch(e){ tbody.innerHTML='<tr><td colspan="6" class="list-empty">'+e.message+'</td></tr>'; }
+    const badge = document.getElementById('appr-badge');
+    if(badge){ badge.textContent = apprQueueCache.length; badge.style.display = apprQueueCache.length ? 'inline-block' : 'none'; }
+  } catch(e){ tbody.innerHTML='<tr><td colspan="8" class="list-empty">'+e.message+'</td></tr>'; }
 }
 function renderApprovalQueue(){
   const tbody = document.getElementById('appr-body');
-  if(!apprQueueCache.length){ tbody.innerHTML='<tr><td colspan="6" class="list-empty">결재할 항목이 없습니다.</td></tr>'; return; }
-  tbody.innerHTML = apprQueueCache.map(a=>`
+  if(!apprQueueCache.length){ tbody.innerHTML='<tr><td colspan="8" class="list-empty">결재할 항목이 없습니다.</td></tr>'; return; }
+  tbody.innerHTML = apprQueueCache.map((a,idx)=>`
     <tr onclick="openDetail('${a.RequestID}','appr')">
+      <td style="text-align:center;color:#0078d4;font-weight:600">${idx+1}</td>
       <td>${a._req.Title||'-'}</td>
       <td>${a._req.PurchaseCategory||'-'}</td>
       <td>${a._req.RequesterName||'-'}</td>
       <td style="text-align:right">${Math.round(a._req.TotalKRW||0).toLocaleString()}</td>
       <td>${a.ApprovalOrder}차 (${a.ApproverRole})</td>
       <td><span class="badge-${(a.Status||'').replace(/[()]/g,'')}">${a.Status||'-'}</span></td>
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">
+        <button class="btn-primary" style="padding:3px 10px;font-size:.72rem;background:#107c10" onclick="processApproval(${a._apId},'승인',${a.RequestID})">승인</button>
+        <button class="btn-danger" style="padding:3px 10px;font-size:.72rem" onclick="processApproval(${a._apId},'반려',${a.RequestID})">반려</button>
+      </td>
     </tr>`).join('');
 }
 
@@ -1642,6 +1657,7 @@ async function openDetail(spId, fromTab){
   let apprHtml = '<div style="text-align:center;color:#a19f9d;padding:10px">불러오는 중...</div>';
   document.getElementById('detail-body').innerHTML = `
     <div class="det-sec">기본 정보</div>
+    <div class="det-row"><div class="det-lbl">PR ID</div><div class="det-val"><span style="font-weight:700">${v.Title||'-'}</span></div></div>
     <div class="det-row"><div class="det-lbl">Purchase Category</div><div class="det-val">${v.PurchaseCategory||'-'}</div></div>
     <div class="det-row"><div class="det-lbl">Requester</div><div class="det-val">${v.RequesterName||'-'} (${v.RequesterEmail||'-'})</div></div>
     <div class="det-row"><div class="det-lbl">Department / Cost Center</div><div class="det-val">${v.Department||'-'} / ${v.CostCenter||'-'}</div></div>
@@ -1705,13 +1721,13 @@ function closeDetailModal(){ document.getElementById('detail-modal').classList.r
 // ── 관리자 ──
 async function loadAdminList(){
   const tbody = document.getElementById('admin-body');
-  if(!siteId){ tbody.innerHTML='<tr><td colspan="6" class="list-empty">SharePoint 사이트 접근 권한이 없습니다.</td></tr>'; return; }
-  tbody.innerHTML = '<tr><td colspan="6" class="list-empty">불러오는 중...</td></tr>';
+  if(!siteId){ tbody.innerHTML='<tr><td colspan="7" class="list-empty">SharePoint 사이트 접근 권한이 없습니다.</td></tr>'; return; }
+  tbody.innerHTML = '<tr><td colspan="7" class="list-empty">불러오는 중...</td></tr>';
   try {
     const data = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items?$expand=fields&$top=999`);
     adminListCache = data.value.map(it=>({...it.fields,_spId:it.id})).sort((a,b)=>b._spId-a._spId);
     renderAdminList();
-  } catch(e){ tbody.innerHTML='<tr><td colspan="6" class="list-empty">'+e.message+'</td></tr>'; }
+  } catch(e){ tbody.innerHTML='<tr><td colspan="7" class="list-empty">'+e.message+'</td></tr>'; }
 }
 function renderAdminList(){
   const st = document.getElementById('admin-f-status').value;
@@ -1720,9 +1736,10 @@ function renderAdminList(){
   if(st) list = list.filter(v=>v.Status===st);
   if(kw) list = list.filter(v=>(v.Title||'').toLowerCase().includes(kw)||(v.RequesterName||'').toLowerCase().includes(kw)||(v.PurchaseCategory||'').toLowerCase().includes(kw));
   const tbody = document.getElementById('admin-body');
-  if(!list.length){ tbody.innerHTML='<tr><td colspan="6" class="list-empty">데이터가 없습니다.</td></tr>'; return; }
-  tbody.innerHTML = list.map(v=>`
+  if(!list.length){ tbody.innerHTML='<tr><td colspan="7" class="list-empty">데이터가 없습니다.</td></tr>'; return; }
+  tbody.innerHTML = list.map((v,idx)=>`
     <tr onclick="openDetail('${v._spId}','admin')">
+      <td style="text-align:center;color:#0078d4;font-weight:600">${idx+1}</td>
       <td>${v.Title||'-'}</td>
       <td>${v.RequesterName||'-'}</td>
       <td>${v.PurchaseCategory||'-'}</td>
