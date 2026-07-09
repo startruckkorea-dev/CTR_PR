@@ -783,8 +783,11 @@ async function boot(account) {
 
   loadSystemConfig().then(cfg=>{
     if(!cfg) return;
-    const contact = cfgVal(cfg,'CTR_PR_CONTACT', cfgVal(cfg,'CONTACT_EMAIL'));
-    if(contact.email) document.getElementById('pr-contact-email').textContent = '문의: '+contact.email;
+    // CTR_PR_CONTACT_1, _2 ... 여러 개 등록된 경우 전부 합쳐서 표시 (없으면 CTR_PR_CONTACT/CONTACT_EMAIL 단일값 폴백)
+    const contactEmails = cfgEmails(cfg, ['CTR_PR_CONTACT_1']);
+    let contactDisplay = contactEmails.join(', ');
+    if(!contactDisplay){ const c = cfgVal(cfg,'CTR_PR_CONTACT', cfgVal(cfg,'CONTACT_EMAIL')); contactDisplay = c.email||''; }
+    if(contactDisplay) document.getElementById('pr-contact-email').textContent = '문의: '+contactDisplay;
     const adminList = cfgEmails(cfg, ['CTR_PR_ADMIN_1','ADMIN_SP']);
     if(adminList.length) ADMIN_EMAILS.splice(0, ADMIN_EMAILS.length, ...adminList);
     if(isMe2(ADMIN_EMAILS)) document.getElementById('tab-admin-btn').style.display='';
@@ -1137,8 +1140,8 @@ function buildApprovers(){
   const cfg = _sysConfig||{};
   const CEO  = cfgVal(cfg,'CTR_PR_CEO',{name:'',email:''});
   const RD   = cfgVal(cfg,'CTR_PR_RD',{name:'',email:''});
-  const BC   = cfgVal(cfg,'CTR_PR_BUDGET_CTRL',{name:'',email:''});
-  const CM   = cfgVal(cfg,'CTR_PR_CTRL_MGR',{name:'',email:''});
+  const BC   = cfgVal(cfg,'CTR_PR_BC',{name:'',email:''});
+  const CM   = cfgVal(cfg,'CTR_PR_CM',{name:'',email:''});
   const CFO  = cfgVal(cfg,'CTR_PR_CFO',{name:'',email:''});
   const amt = totalAmountKRW();
   const apLine=[];
