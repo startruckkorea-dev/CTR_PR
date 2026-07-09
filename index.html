@@ -788,6 +788,17 @@ async function apiAllRetry(path, retries=3){
   }
   throw lastErr;
 }
+// LIST_APPROVALS의 $filter=fields/RequestID eq N 쿼리가 이 리스트에서 계속 500(General exception)을 내서
+// 서버 필터 대신 전체를 가져와 클라이언트에서 걸러내는 방식으로 변경 (더 느리지만 훨씬 안정적)
+let _apprAllCache = null, _apprAllCacheTime = 0;
+async function getApprovalsForRequest(reqId, forceRefresh){
+  const now = Date.now();
+  if(forceRefresh || !_apprAllCache || (now - _apprAllCacheTime) > 5000){
+    _apprAllCache = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$top=999`);
+    _apprAllCacheTime = now;
+  }
+  return { value: _apprAllCache.value.filter(it=>Number(it.fields.RequestID)===Number(reqId)) };
+}
 function isMe(email) {
   if(!email) return false;
   const e = email.toLowerCase();
@@ -1611,12 +1622,12 @@ async function processApproval(apprId, action, reqId){
 
     if(action==='반려'){
       await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${reqId}/fields`, 'PATCH', {Status:'반려'});
-      const allAppr = await apiAllRetry(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$filter=fields/RequestID eq ${parseInt(reqId)}&$top=50`);
+      const allAppr = await getApprovalsForRequest(reqId, true);
       for(const it of allAppr.value){
         if(it.fields.Status==='대기(잠김)') await api(`/sites/${siteId}/lists/${LIST_APPROVALS}/items/${it.id}/fields`,'PATCH',{Status:'반려(취소)'});
       }
     } else {
-      const allAppr = await apiAllRetry(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$filter=fields/RequestID eq ${parseInt(reqId)}&$top=50`);
+      const allAppr = await getApprovalsForRequest(reqId, true);
       const sorted = allAppr.value.sort((a,b)=>(a.fields.ApprovalOrder||0)-(b.fields.ApprovalOrder||0));
       const next = sorted.find(it=>it.fields.Status==='대기(잠김)');
       if(next){
@@ -1642,7 +1653,7 @@ function confirmWithdraw(spId){
 async function withdrawRequest(spId){
   loading(true,'철회 처리 중...');
   try {
-    const apprData = await apiAllRetry(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$filter=fields/RequestID eq ${parseInt(spId)}&$top=50`);
+    const apprData = await getApprovalsForRequest(spId, true);
     const items = apprData.value.sort((a,b)=>(a.fields.ApprovalOrder||0)-(b.fields.ApprovalOrder||0));
     const first = items[0];
     if(first && first.fields.Status !== '대기'){
@@ -1745,7 +1756,7 @@ async function openDetail(spId, fromTab){
   document.getElementById('detail-modal').classList.add('open');
 
   try {
-    const apprData = await apiAllRetry(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$filter=fields/RequestID eq ${parseInt(v._spId)}&$top=50`);
+    const apprData = await getApprovalsForRequest(v._spId);
     const items = apprData.value.map(it=>it.fields).sort((a,b)=>(a.ApprovalOrder||0)-(b.ApprovalOrder||0));
     window._currentApprList = items;
     const ROLE_LABELS = {TL:'Team Leader', DH:'Department Head', CEO:'CEO', RD:'RD', BC:'Budget Controller', CM:'Controlling Manager', CFO:'CFO'};
