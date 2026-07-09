@@ -476,7 +476,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <div class="card-title" style="margin-bottom:0">전체 신청서 관리</div>
-        <button class="btn-add" onclick="exportAdminExcel()">📥 Excel 내보내기</button>
+        <button onclick="exportAdminExcel()" style="padding:6px 14px;background:#107c10;color:#fff;border:none;border-radius:4px;font-size:.82rem;cursor:pointer;white-space:nowrap">📊 Excel 내보내기</button>
       </div>
       <div class="list-filters">
         <select id="admin-f-status" onchange="renderAdminList()">
@@ -1177,11 +1177,11 @@ function buildApprovers(){
   apLine.forEach((a,i)=>{
     const order=i+1;
     if(a.fixed){
-      result.push({role:a.role,label:a.label,name:a.person.name||'',email:a.person.email||'',order});
+      result.push({role:a.role,label:a.label,name:a.person.name||'',email:a.person.email||'',order,fixed:true});
     } else {
       const nm=(document.getElementById('dyn-'+a.role+'-name')||{}).value||'';
       const em=(document.getElementById('dyn-'+a.role+'-email')||{}).value||'';
-      result.push({role:a.role,label:a.label,name:nm||'TBD',email:em,order});
+      result.push({role:a.role,label:a.label,name:nm||'TBD',email:em,order,fixed:false});
     }
   });
   return result;
