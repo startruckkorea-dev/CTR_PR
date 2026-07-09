@@ -454,8 +454,8 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
         <input type="text" id="f-search" placeholder="PR ID, 품목 검색..." oninput="renderList()">
       </div>
       <table class="list-table">
-        <thead><tr><th>PR ID</th><th>Category</th><th>제출일</th><th>금액(KRW)</th><th>진행</th><th>상태</th></tr></thead>
-        <tbody id="list-body"><tr><td colspan="6" class="list-empty">불러오는 중...</td></tr></tbody>
+        <thead><tr><th>PR ID</th><th>Category</th><th>제출일</th><th>금액(KRW)</th><th>진행</th><th>상태</th><th></th></tr></thead>
+        <tbody id="list-body"><tr><td colspan="7" class="list-empty">불러오는 중...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -1483,8 +1483,8 @@ function switchTab(tab){
 // ── 내 신청서 목록 ──
 async function loadMyList(){
   const tbody = document.getElementById('list-body');
-  if(!siteId){ tbody.innerHTML='<tr><td colspan="6" class="list-empty">SharePoint 사이트 접근 권한이 없습니다. IT 담당자에게 문의하세요.</td></tr>'; return; }
-  tbody.innerHTML = '<tr><td colspan="6" class="list-empty">불러오는 중...</td></tr>';
+  if(!siteId){ tbody.innerHTML='<tr><td colspan="7" class="list-empty">SharePoint 사이트 접근 권한이 없습니다. IT 담당자에게 문의하세요.</td></tr>'; return; }
+  tbody.innerHTML = '<tr><td colspan="7" class="list-empty">불러오는 중...</td></tr>';
   try {
     const data = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items?$expand=fields&$top=999`);
     myListCache = data.value
@@ -1492,7 +1492,11 @@ async function loadMyList(){
       .map(it=>({...it.fields, _spId:it.id}))
       .sort((a,b)=>b._spId-a._spId);
     renderList();
-  } catch(e){ tbody.innerHTML='<tr><td colspan="6" class="list-empty">'+e.message+'</td></tr>'; }
+  } catch(e){ tbody.innerHTML='<tr><td colspan="7" class="list-empty">'+e.message+'</td></tr>'; }
+}
+function _wdBtnList(spId, status){
+  if(status!=='대기') return '';
+  return `<button onclick="event.stopPropagation();confirmWithdraw('${spId}')" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 12px;font-size:.75rem;cursor:pointer;font-family:inherit;white-space:nowrap;">Withdraw</button>`;
 }
 function renderList(){
   const st = document.getElementById('f-status').value;
@@ -1501,7 +1505,7 @@ function renderList(){
   if(st) list = list.filter(v=>v.Status===st);
   if(kw) list = list.filter(v=>(v.Title||'').toLowerCase().includes(kw)||(v.PurchaseCategory||'').toLowerCase().includes(kw));
   const tbody = document.getElementById('list-body');
-  if(!list.length){ tbody.innerHTML='<tr><td colspan="6" class="list-empty">신청 내역이 없습니다.</td></tr>'; return; }
+  if(!list.length){ tbody.innerHTML='<tr><td colspan="7" class="list-empty">신청 내역이 없습니다.</td></tr>'; return; }
   tbody.innerHTML = list.map(v=>`
     <tr onclick="openDetail('${v._spId}','list')">
       <td>${v.Title||'-'}</td>
@@ -1510,6 +1514,7 @@ function renderList(){
       <td style="text-align:right">${Math.round(v.TotalKRW||0).toLocaleString()}</td>
       <td>${v.CurrentStep||0}/${v.TotalSteps||0}</td>
       <td><span class="badge-${(v.Status||'').replace(/[()]/g,'')}">${v.Status||'-'}</span></td>
+      <td style="text-align:center;vertical-align:middle" onclick="event.stopPropagation()">${_wdBtnList(v._spId, v.Status)}</td>
     </tr>`).join('');
 }
 
@@ -1659,6 +1664,7 @@ async function openDetail(spId, fromTab){
 
     <div class="det-sec">결재 이력</div>
     <div id="detail-appr-list">${apprHtml}</div>
+    <div id="detail-appr-action-btns" style="margin-top:14px;text-align:right"></div>
   `;
 
   const actionsEl = document.getElementById('detail-actions');
@@ -1675,20 +1681,21 @@ async function openDetail(spId, fromTab){
     const items = apprData.value.map(it=>it.fields).sort((a,b)=>(a.ApprovalOrder||0)-(b.ApprovalOrder||0));
     window._currentApprList = items;
     document.getElementById('detail-appr-list').innerHTML = items.map(a=>{
-      const isPending = a.Status==='대기' && isMe(a.ApproverEmail);
-      let actionBtns = '';
-      if(isPending){
-        actionBtns = `<div style="margin-top:6px;display:flex;gap:6px">
-          <button class="btn-primary" style="padding:5px 14px;font-size:12px" onclick="processApproval(${apprData.value.find(x=>x.fields.ApprovalOrder===a.ApprovalOrder).id},'승인',${v._spId})">승인</button>
-          <button class="btn-danger" style="padding:5px 14px;font-size:12px" onclick="processApproval(${apprData.value.find(x=>x.fields.ApprovalOrder===a.ApprovalOrder).id},'반려',${v._spId})">반려</button>
-        </div>`;
-      }
       return `<div class="appr-item"><div>
         <div><b>${a.ApprovalOrder}차 · ${a.ApproverRole}</b> — ${a.ApproverName||'-'}</div>
         <div style="font-size:.72rem;color:#a19f9d">${a.ApproverEmail||''}</div>
-        ${actionBtns}
       </div><div class="status-${(a.Status||'').replace(/[()]/g,'')}">${a.Status||'-'}</div></div>`;
     }).join('');
+
+    // 내 결재 대기 건이면 ACC Voucher와 동일하게 결재 이력 아래에 승인/반려 버튼 한 세트만 표시
+    const myPendingItem = apprData.value.find(x=>x.fields.Status==='대기' && isMe(x.fields.ApproverEmail));
+    const btnWrap = document.getElementById('detail-appr-action-btns');
+    if(btnWrap){
+      btnWrap.innerHTML = myPendingItem
+        ? `<button class="btn-primary" style="padding:8px 22px;font-size:.8rem;background:#107c10;margin-right:8px" onclick="processApproval(${myPendingItem.id},'승인',${v._spId})">✅ 승인</button>
+           <button class="btn-danger" style="padding:8px 22px;font-size:.8rem" onclick="processApproval(${myPendingItem.id},'반려',${v._spId})">❌ 반려</button>`
+        : '';
+    }
   } catch(e){
     document.getElementById('detail-appr-list').innerHTML = '<div style="color:#a4262c">결재 이력 로드 실패: '+e.message+'</div>';
   }
