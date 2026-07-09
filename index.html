@@ -276,7 +276,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
     <div class="card">
       <div class="section-title">2. Description of Goods</div>
       <div class="lines-header">
-        <span style="font-size:12px;color:#605e5c">품목/견적/수량/금액을 입력하세요</span>
+        <span style="font-size:12px;color:#605e5c">품목/견적/수량/단가를 입력하세요 (Unit Price × Quantity가 자동으로 합산됩니다)</span>
         <button class="btn-add" onclick="addGoodsLine()">+ 라인 추가</button>
       </div>
       <div class="lines-scroll">
@@ -285,7 +285,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
             <th style="width:34%">Description of Goods</th>
             <th style="width:20%">Quotation</th>
             <th style="width:12%">Quantity</th>
-            <th style="width:20%">Amount</th>
+            <th style="width:20%">Unit Price</th>
             <th style="width:34px"></th>
           </tr></thead>
           <tbody id="goods-tbody"></tbody>
@@ -455,7 +455,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
         <input type="text" id="f-search" placeholder="PR ID, 품목 검색..." oninput="renderList()">
       </div>
       <table class="list-table">
-        <thead><tr><th style="width:44px;text-align:center">No</th><th>PR ID</th><th>Category</th><th>제출일</th><th>금액(KRW)</th><th>진행</th><th>상태</th><th style="width:90px;text-align:center">Withdraw</th></tr></thead>
+        <thead><tr><th style="width:44px;text-align:center">No</th><th>PR ID</th><th>Category</th><th>제출일</th><th style="text-align:right">금액(KRW)</th><th>진행</th><th>상태</th><th style="width:90px;text-align:center">Withdraw</th></tr></thead>
         <tbody id="list-body"><tr><td colspan="8" class="list-empty">불러오는 중...</td></tr></tbody>
       </table>
     </div>
@@ -466,7 +466,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
     <div class="card">
       <div class="card-title">결재함</div>
       <table class="list-table">
-        <thead><tr><th style="width:44px;text-align:center">No</th><th>PR ID</th><th>Category</th><th>신청자</th><th>금액(KRW)</th><th>차수</th><th>상태</th><th style="width:120px;text-align:center">처리</th></tr></thead>
+        <thead><tr><th style="width:44px;text-align:center">No</th><th>PR ID</th><th>Category</th><th>신청자</th><th style="text-align:right">금액(KRW)</th><th>차수</th><th>상태</th><th style="width:120px;text-align:center">처리</th></tr></thead>
         <tbody id="appr-body"><tr><td colspan="8" class="list-empty">불러오는 중...</td></tr></tbody>
       </table>
     </div>
@@ -490,7 +490,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
         <input type="text" id="admin-f-search" placeholder="PR ID, 신청자, 품목 검색..." oninput="renderAdminList()">
       </div>
       <table class="list-table">
-        <thead><tr><th style="width:44px;text-align:center">No</th><th>PR ID</th><th>신청자</th><th>Category</th><th>제출일</th><th>금액(KRW)</th><th>상태</th></tr></thead>
+        <thead><tr><th style="width:44px;text-align:center">No</th><th>PR ID</th><th>신청자</th><th>Category</th><th>제출일</th><th style="text-align:right">금액(KRW)</th><th>상태</th></tr></thead>
         <tbody id="admin-body"><tr><td colspan="7" class="list-empty">불러오는 중...</td></tr></tbody>
       </table>
     </div>
@@ -777,6 +777,16 @@ async function apiAll(path) {
     url = d['@odata.nextLink'] || null;
   }
   return {value: items};
+}
+// SharePoint 리스트 $filter 조회가 가끔 "General exception while processing" 등으로 일시적으로 실패하는 경우가 있어
+// 결재 이력 조회처럼 중요한 곳에는 짧은 대기 후 재시도하는 래퍼를 사용
+async function apiAllRetry(path, retries=3){
+  let lastErr;
+  for(let i=0;i<retries;i++){
+    try { return await apiAll(path); }
+    catch(e){ lastErr = e; if(i<retries-1) await new Promise(r=>setTimeout(r, 400*(i+1))); }
+  }
+  throw lastErr;
 }
 function isMe(email) {
   if(!email) return false;
@@ -1601,12 +1611,12 @@ async function processApproval(apprId, action, reqId){
 
     if(action==='반려'){
       await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${reqId}/fields`, 'PATCH', {Status:'반려'});
-      const allAppr = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$filter=fields/RequestID eq ${parseInt(reqId)}&$top=50`);
+      const allAppr = await apiAllRetry(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$filter=fields/RequestID eq ${parseInt(reqId)}&$top=50`);
       for(const it of allAppr.value){
         if(it.fields.Status==='대기(잠김)') await api(`/sites/${siteId}/lists/${LIST_APPROVALS}/items/${it.id}/fields`,'PATCH',{Status:'반려(취소)'});
       }
     } else {
-      const allAppr = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$filter=fields/RequestID eq ${parseInt(reqId)}&$top=50`);
+      const allAppr = await apiAllRetry(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$filter=fields/RequestID eq ${parseInt(reqId)}&$top=50`);
       const sorted = allAppr.value.sort((a,b)=>(a.fields.ApprovalOrder||0)-(b.fields.ApprovalOrder||0));
       const next = sorted.find(it=>it.fields.Status==='대기(잠김)');
       if(next){
@@ -1632,7 +1642,7 @@ function confirmWithdraw(spId){
 async function withdrawRequest(spId){
   loading(true,'철회 처리 중...');
   try {
-    const apprData = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$filter=fields/RequestID eq ${parseInt(spId)}&$top=50`);
+    const apprData = await apiAllRetry(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$filter=fields/RequestID eq ${parseInt(spId)}&$top=50`);
     const items = apprData.value.sort((a,b)=>(a.fields.ApprovalOrder||0)-(b.fields.ApprovalOrder||0));
     const first = items[0];
     if(first && first.fields.Status !== '대기'){
@@ -1690,7 +1700,7 @@ async function openDetail(spId, fromTab){
     <div class="det-row"><div class="det-lbl">상태</div><div class="det-val"><span class="badge-${(v.Status||'').replace(/[()]/g,'')}">${v.Status||'-'}</span></div></div>
 
     <div class="det-sec">Description of Goods</div>
-    ${goods.map(g=>`<div class="det-row"><div class="det-lbl">${g.desc||'-'}</div><div class="det-val">수량 ${g.qty||1} · ${Math.round((g.amount||0)*(g.qty||1)).toLocaleString()} KRW</div></div>`).join('')||'<div class="det-row"><div class="det-val">없음</div></div>'}
+    ${goods.map(g=>`<div class="det-row"><div class="det-lbl">${g.desc||'-'}</div><div class="det-val">단가 ${Math.round(g.amount||0).toLocaleString()} × 수량 ${g.qty||1} = <b>${Math.round((g.amount||0)*(g.qty||1)).toLocaleString()} KRW</b></div></div>`).join('')||'<div class="det-row"><div class="det-val">없음</div></div>'}
     <div class="det-row"><div class="det-lbl"><b>TOTAL AMOUNT</b></div><div class="det-val"><b>${Math.round(v.TotalAmount||0).toLocaleString()} KRW</b></div></div>
 
     <div class="det-sec">Accounting Information</div>
@@ -1735,13 +1745,14 @@ async function openDetail(spId, fromTab){
   document.getElementById('detail-modal').classList.add('open');
 
   try {
-    const apprData = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$filter=fields/RequestID eq ${parseInt(v._spId)}&$top=50`);
+    const apprData = await apiAllRetry(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$filter=fields/RequestID eq ${parseInt(v._spId)}&$top=50`);
     const items = apprData.value.map(it=>it.fields).sort((a,b)=>(a.ApprovalOrder||0)-(b.ApprovalOrder||0));
     window._currentApprList = items;
+    const ROLE_LABELS = {TL:'Team Leader', DH:'Department Head', CEO:'CEO', RD:'RD', BC:'Budget Controller', CM:'Controlling Manager', CFO:'CFO'};
     document.getElementById('detail-appr-list').innerHTML = items.map(a=>{
       return `<div class="appr-item"><div>
-        <div><b>${a.ApprovalOrder}차 · ${a.ApproverRole}</b> — ${a.ApproverName||'-'}</div>
-        <div style="font-size:.72rem;color:#a19f9d">${a.ApproverEmail||''}</div>
+        <div><b>${a.ApprovalOrder}차 결재자(${ROLE_LABELS[a.ApproverRole]||a.ApproverRole})</b></div>
+        <div style="font-size:.72rem;color:#a19f9d">${a.ApproverName||'-'} · ${a.ApproverEmail||''}</div>
       </div><div class="status-${(a.Status||'').replace(/[()]/g,'')}">${a.Status||'-'}</div></div>`;
     }).join('');
 
@@ -1841,11 +1852,14 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
       const rejected = a.Status==='반려';
       val = `<div style="display:inline-block;border:1px solid ${rejected?'#a4262c':'#0078d4'};border-radius:4px;padding:2px 5px">
         <div style="font-size:7.5px;font-weight:700;color:${rejected?'#a4262c':'#0078d4'}">${rejected?'❌ 반려':'✅ 전자결재'}</div>
-        <div style="font-size:7px;color:#333">${esc(a.ApproverName||'')}</div>
         <div style="font-size:6.5px;color:#666">${fmtDT(a.ApprovalDate)}</div>
       </div>`;
-    } else if(a){ val = esc(a.ApproverName||''); }
+    } else if(a){ val = ''; }
     return `<td style="${cellB};text-align:center;font-size:9px">${val}</td>`;
+  }).join('');
+  const nameRow = roleCols.map(rc=>{
+    const role=rc[0]; const a=apprByRole[role];
+    return `<td style="${cellB};text-align:center;font-size:9px">${a?esc(a.ApproverName||''):NA}</td>`;
   }).join('');
   const amtRow = roleCols.map(rc=>`<td style="${cellB};text-align:center;font-size:8.5px">${esc(rules[rc[0]]==='필수'?'Required':rules[rc[0]])}</td>`).join('');
 
@@ -1864,10 +1878,17 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
     </table>
     <div style="font-weight:700;font-size:11px;margin-top:8px;border:1px solid #000;padding:4px 6px;background:#f0f0f0">Requester</div>
     <table style="width:100%;border-collapse:collapse;border:1px solid #000;border-top:none">
-      <tr><td style="${lblB}">Name</td><td style="${cellB}">${esc(v.RequesterName)}</td>
+      <tr><td style="${lblB}">Name</td><td style="${cellB}">${esc(v.RequesterName)}${v.RequesterEmail?' ('+esc(v.RequesterEmail)+')':''}</td>
           <td style="${lblB}">Department</td><td style="${cellB}">${esc(v.Department)}</td>
           <td style="${lblB}">Cost Center No.</td><td style="${cellB}">${esc(v.CostCenter)}</td>
-          <td style="${lblB}">Phone Ext.</td><td style="${cellB}">${esc(v.PhoneExt)}</td></tr>
+          <td style="${lblB}">Phone Ext.</td><td style="${cellB}">${esc(v.PhoneExt)}</td>
+          <td style="${lblB}">(E) Signature</td><td style="${cellB};text-align:center">
+            <div style="display:inline-block;border:1px solid #0078d4;border-radius:4px;padding:2px 6px">
+              <div style="font-size:7.5px;font-weight:700;color:#0078d4">✅ 전자결재</div>
+              <div style="font-size:7px;color:#333">${esc(v.RequesterName)}</div>
+              <div style="font-size:6.5px;color:#666">${fmtDT(v.SubmittedDate)}</div>
+            </div>
+          </td></tr>
     </table>
     <div style="font-weight:700;font-size:11px;margin-top:8px;border:1px solid #000;padding:4px 6px;background:#f0f0f0">Accounting Information</div>
     <table style="width:100%;border-collapse:collapse;border:1px solid #000;border-top:none">
@@ -1887,8 +1908,9 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
     <div style="font-weight:700;font-size:11px;margin-top:8px;border:1px solid #000;padding:4px 6px;background:#f0f0f0">Authorization</div>
     <table style="width:100%;border-collapse:collapse;border:1px solid #000;border-top:none">
       <tr><td style="${lblB}">Title</td>${roleCols.map(rc=>`<td style="${lblB};text-align:center">${rc[1]}</td>`).join('')}</tr>
-      <tr><td style="${lblB}">Signature</td>${apprRow}</tr>
-      <tr><td style="${lblB}">Amount</td>${amtRow}</tr>
+      <tr><td style="${lblB}">(E) Signature & Date</td>${apprRow}</tr>
+      <tr><td style="${lblB}">Name</td>${nameRow}</tr>
+      <tr><td style="${lblB}">Approval Conditions</td>${amtRow}</tr>
     </table>
   </div>`;
 }
