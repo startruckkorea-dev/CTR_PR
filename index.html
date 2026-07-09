@@ -673,7 +673,7 @@ async function loadEmployees(){
 
 // PR 결재 매트릭스 (F&C Controlling PR 양식 기준: Team Leader/Dept Head는 소액, CEO/RD/CFO는 고액 에스컬레이션, Budget Controller/Controlling Manager는 항상 필수)
 const APPROVAL_RULES = {
-  PR: { TL:'< 1,000,000', DH:'< 20,000,000', CEO:'>= 20,000,000', RD:'>= 20,000,000', BC:'필수', CM:'필수', CFO:'>= 20,000,000' }
+  PR: { TL:'필수', DH:'필수', CEO:'>= 20,000,000', RD:'>= 20,000,000', BC:'필수', CM:'필수', CFO:'>= 20,000,000' }
 };
 
 // ── System Config (system_config_final.xlsx) ──
@@ -1781,7 +1781,7 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
     } else if(a){ val = esc(a.ApproverName||''); }
     return `<td style="${cellB};text-align:center;font-size:9px">${val}</td>`;
   }).join('');
-  const amtRow = roleCols.map(rc=>`<td style="${cellB};text-align:center;font-size:8.5px">${esc(rules[rc[0]])}</td>`).join('');
+  const amtRow = roleCols.map(rc=>`<td style="${cellB};text-align:center;font-size:8.5px">${esc(rules[rc[0]]==='필수'?'Required':rules[rc[0]])}</td>`).join('');
 
   return `<div style="width:760px;background:#fff;color:#000;font-family:'Malgun Gothic',sans-serif;padding:18px;box-sizing:border-box;font-size:11px;line-height:1.45">
     <div style="text-align:center;font-weight:700;font-size:16px;border:2px solid #000;border-bottom:none;padding:8px">Star Truck Korea Co., Ltd.</div>
