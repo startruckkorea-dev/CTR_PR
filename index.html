@@ -794,15 +794,20 @@ async function apiAllRetry(path, retries=3){
   throw lastErr;
 }
 // LIST_APPROVALS의 $filter=fields/RequestID eq N 쿼리가 이 리스트에서 계속 500(General exception)을 내서
-// 서버 필터 대신 전체를 가져와 클라이언트에서 걸러내는 방식으로 변경 (더 느리지만 훨씬 안정적)
+// 서버 필터 대신 전체를 가져와 클라이언트에서 걸러내는 방식으로 변경. 대신 캐시를 여러 함수가 공유해서
+// 승인/반려 직후 결재함을 다시 그릴 때 등 짧은 시간 안에 중복으로 전체를 다시 받아오지 않도록 함.
 let _apprAllCache = null, _apprAllCacheTime = 0;
-async function getApprovalsForRequest(reqId, forceRefresh){
+async function getAllApprovalsCached(forceRefresh){
   const now = Date.now();
   if(forceRefresh || !_apprAllCache || (now - _apprAllCacheTime) > 5000){
     _apprAllCache = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$top=999`);
     _apprAllCacheTime = now;
   }
-  return { value: _apprAllCache.value.filter(it=>Number(it.fields.RequestID)===Number(reqId)) };
+  return _apprAllCache;
+}
+async function getApprovalsForRequest(reqId, forceRefresh){
+  const all = await getAllApprovalsCached(forceRefresh);
+  return { value: all.value.filter(it=>Number(it.fields.RequestID)===Number(reqId)) };
 }
 function isMe(email) {
   if(!email) return false;
@@ -1571,7 +1576,7 @@ async function loadApprovalQueue(){
   tbody.innerHTML = '<tr><td colspan="8" class="list-empty">불러오는 중...</td></tr>';
   try {
     const [apprData, reqData] = await Promise.all([
-      apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$top=999`),
+      getAllApprovalsCached(),
       apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items?$expand=fields&$top=999`)
     ]);
     const reqMap = {}; reqData.value.forEach(r=>reqMap[r.id]=r.fields);
@@ -1636,8 +1641,10 @@ async function processApproval(apprId, action, reqId){
       const sorted = allAppr.value.sort((a,b)=>(a.fields.ApprovalOrder||0)-(b.fields.ApprovalOrder||0));
       const next = sorted.find(it=>it.fields.Status==='대기(잠김)');
       if(next){
-        await api(`/sites/${siteId}/lists/${LIST_APPROVALS}/items/${next.id}/fields`, 'PATCH', {Status:'대기'});
-        const reqF = (await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${reqId}/fields`));
+        const [, reqF] = await Promise.all([
+          api(`/sites/${siteId}/lists/${LIST_APPROVALS}/items/${next.id}/fields`, 'PATCH', {Status:'대기'}),
+          api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${reqId}/fields`)
+        ]);
         await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${reqId}/fields`, 'PATCH', {CurrentStep:(reqF.CurrentStep||0)+1});
       } else {
         await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${reqId}/fields`, 'PATCH', {Status:'승인완료'});
@@ -1645,7 +1652,7 @@ async function processApproval(apprId, action, reqId){
     }
     showAlert(action+' 처리되었습니다.', '', '✅');
     closeDetailModal();
-    loadApprovalQueue(); checkApprovalBadge();
+    loadApprovalQueue();
   } catch(e){ showAlert('오류가 발생했습니다.', e.message, '⚠️'); }
   finally { loading(false); }
 }
