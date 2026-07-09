@@ -252,7 +252,8 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
         </div>
       </div>
       <div style="font-size:.68rem;color:#a19f9d;margin:-8px 0 14px;line-height:1.6">
-        * 첨부파일은 새로 첨부해주세요
+        * 첨부파일은 새로 첨부해주세요 &nbsp;·&nbsp;
+        * Exchange Rate는 <b>오늘 기준 환율</b>을 그대로 사용합니다
       </div>
 
       <div class="section-title">1. 기본 정보</div>
@@ -272,8 +273,9 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
           </select>
         </div>
         <div class="form-group">
-          <label>Total Amount (incl. VAT)</label>
+          <label>Total Amount (Excl. VAT)</label>
           <input type="text" id="v-goods-total" readonly style="text-align:right;font-weight:700;color:#0078d4">
+          <div id="v-goods-total-note" style="font-size:10px;color:#a19f9d;margin-top:2px"></div>
         </div>
       </div>
     </div>
@@ -287,10 +289,9 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
       <div class="lines-scroll">
         <table class="lines" id="goods-table">
           <thead><tr>
-            <th style="width:34%">Description of Goods</th>
-            <th style="width:20%">Quotation</th>
-            <th style="width:12%">Quantity</th>
-            <th style="width:20%">Unit Price</th>
+            <th style="width:40%">Description of Goods</th>
+            <th style="width:14%">Quantity</th>
+            <th style="width:24%">Unit Price</th>
             <th style="width:34px"></th>
           </tr></thead>
           <tbody id="goods-tbody"></tbody>
@@ -310,7 +311,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
           <input type="text" id="v-requester" readonly>
         </div>
         <div class="form-group">
-          <label>Department</label>
+          <label>Department <span class="req">*</span></label>
           <input type="text" id="v-dept" placeholder="부서명 입력">
         </div>
         <div class="form-group">
@@ -326,6 +327,23 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
 
     <div class="card">
       <div class="section-title">4. Accounting Information</div>
+      <div class="form-row" style="margin-bottom:10px">
+        <div class="form-group">
+          <label>Currency</label>
+          <select id="v-currency" onchange="onCurrencyChange()">
+            <option value="KRW">KRW</option>
+            <option value="EUR">EUR</option>
+            <option value="USD">USD</option>
+            <option value="SGD">SGD</option>
+            <option value="JPY">JPY</option>
+            <option value="CNY">CNY</option>
+          </select>
+        </div>
+        <div class="form-group" id="v-exrate-group" style="display:none">
+          <label>Exchange Rate <span style="font-size:10px;color:#605e5c;font-weight:400">— 오늘 기준 자동 입력</span></label>
+          <input type="number" id="v-exrate" placeholder="환율" step="0.0001" oninput="calcGoodsTotal();calcAccTotal()">
+        </div>
+      </div>
       <div class="lines-header">
         <span style="font-size:12px;color:#605e5c">G/L Account · Cost Center · 금액을 입력하세요 (VAT 라인은 자동 추가)</span>
         <button class="btn-add" onclick="addAccLine()">+ 라인 추가</button>
@@ -343,75 +361,21 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
           <tbody id="acc-tbody"></tbody>
         </table>
       </div>
-      <div class="totals-bar">
-        <span class="total-label">TOTAL (VAT 포함)</span>
-        <span class="total-main" id="acc-total-display">0</span>
+      <div class="totals-bar" style="flex-direction:column;align-items:stretch;gap:4px">
+        <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px">
+          <span class="total-label">TOTAL (Incl. VAT)</span>
+          <span class="total-main" id="acc-total-incl-display">0</span>
+        </div>
+        <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px">
+          <span class="total-label">TOTAL (Excl. VAT)</span>
+          <span class="total-main" id="acc-total-excl-display">0</span>
+        </div>
+        <div id="acc-goods-match-banner" style="text-align:right;font-size:12px;margin-top:2px"></div>
       </div>
     </div>
 
     <div class="card">
-      <div class="section-title">5. Vendor Details</div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Vendor Type</label>
-          <select id="v-vendor-type" onchange="toggleVendorType()">
-            <option value="existing">Existing Vendor</option>
-            <option value="new">New Vendor</option>
-          </select>
-        </div>
-        <div></div>
-      </div>
-      <div id="vendor-existing-block">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Vendor No.</label>
-            <div class="bp-search-row">
-              <input type="text" id="v-vendor-code" readonly placeholder="검색으로 선택">
-              <button class="btn-search" onclick="openBpModal()">🔍 검색</button>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Vendor Name</label>
-            <input type="text" id="v-vendor-name" readonly>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Vendor Tel. No. <span style="color:#0078d4;font-weight:400;font-size:11px">(수기입력)</span></label>
-            <input type="text" id="v-vendor-tel" placeholder="전화번호 직접 입력">
-          </div>
-          <div class="form-group">
-            <label>Vendor Business No.</label>
-            <input type="text" id="v-vendor-bizno" readonly>
-          </div>
-        </div>
-      </div>
-      <div id="vendor-new-block" style="display:none">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Vendor Name</label>
-            <input type="text" id="v-vendor-new-name" placeholder="신규 거래처명">
-          </div>
-          <div class="form-group">
-            <label>Vendor Address</label>
-            <input type="text" id="v-vendor-new-addr" placeholder="주소">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Vendor Tel. No.</label>
-            <input type="text" id="v-vendor-new-tel" placeholder="전화번호">
-          </div>
-          <div class="form-group">
-            <label>Vendor Fax No.</label>
-            <input type="text" id="v-vendor-new-fax" placeholder="팩스번호">
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="section-title">6. Remarks</div>
+      <div class="section-title">5. Remarks</div>
       <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:#323130">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="r-onetime"> Onetime payment</label>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="r-partial"> Partial payment (For partial payment, please attach the "installment table")</label>
@@ -422,7 +386,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
     </div>
 
     <div class="card">
-      <div class="section-title">7. 첨부파일</div>
+      <div class="section-title">6. 첨부파일</div>
       <div style="font-size:12px;color:#605e5c;margin-bottom:8px">Quotation, installment table 등을 첨부해주세요. (최대 20MB)</div>
       <div class="file-area" onclick="document.getElementById('v-file-input').click()">
         <input type="file" id="v-file-input" multiple onchange="onFileSelect(event)">
@@ -432,7 +396,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
     </div>
 
     <div class="card">
-      <div class="section-title">8. Authorization (결재라인 미리보기)</div>
+      <div class="section-title">7. Authorization (결재라인 미리보기)</div>
       <div class="appr-preview-strip" id="appr-line-preview" style="display:none">
         <div id="appr-line-preview-content"></div>
       </div>
@@ -602,7 +566,7 @@ let msal_g = null, user = null, siteId = null, nasId = null;
 let employeeData = []; // Team Leader/Department Head 동적 선택용 (employee_search.xlsx, GW와 동일 파일)
 let _dynApproverState = {}; // {role: {dept, team, email}} — 재렌더링되어도 선택값 유지
 let bpData = [];
-let goodsLines = [];   // {desc, quotation, qty, amount}
+let goodsLines = [];   // {desc, qty, amount}
 let accLines = [];     // {itemDesc, gl, glName, cctr, cctrName, amount, isVat}
 let prFiles = [];
 let currentGlLineIdx = null, currentCcLineIdx = null;
@@ -829,7 +793,7 @@ async function boot(account) {
   document.getElementById('app').style.display='block';
   document.getElementById('app-header').style.display='flex';
   document.getElementById('user-name').textContent=(account.name||account.username)+' ('+account.username+')';
-  document.getElementById('v-requester').value = account.name||account.username;
+  document.getElementById('v-requester').value = koreanName(account.name||account.username);
   document.getElementById('v-date').value = new Date().toISOString().slice(0,10);
 
   if(!goodsLines.length){ addGoodsLine(); }
@@ -841,6 +805,7 @@ async function boot(account) {
   loadBPMaster().catch(e=>console.warn('BP 마스터 로드 실패:', e.message));
   loadGLMaster().catch(e=>console.warn('GL 마스터 로드 실패:', e.message));
   loadEmployees().catch(e=>console.warn('직원 데이터 로드 실패:', e.message));
+  loadExchangeRates().catch(e=>console.warn('환율 로드 실패:', e.message));
 
   loadSystemConfig().then(cfg=>{
     if(!cfg) return;
@@ -997,32 +962,78 @@ async function loadBPMaster() {
   }
 }
 
-// ── Vendor Type 토글 ──
-function toggleVendorType(){
-  const t = document.getElementById('v-vendor-type').value;
-  document.getElementById('vendor-existing-block').style.display = t==='existing'?'':'none';
-  document.getElementById('vendor-new-block').style.display = t==='new'?'':'none';
-}
-
 // ── Description of Goods 라인 ──
-function addGoodsLine(){ goodsLines.push({desc:'',quotation:'',qty:1,amount:0}); renderGoodsLines(); }
+function addGoodsLine(){ goodsLines.push({desc:'',qty:1,amount:0}); renderGoodsLines(); }
 function deleteGoodsLine(i){ goodsLines.splice(i,1); renderGoodsLines(); }
 function renderGoodsLines(){
   const tb = document.getElementById('goods-tbody');
   tb.innerHTML = goodsLines.map((l,i)=>`
     <tr>
       <td><input type="text" value="${escAttr(l.desc)}" oninput="goodsLines[${i}].desc=this.value"></td>
-      <td><input type="text" value="${escAttr(l.quotation)}" placeholder="견적서 번호/파일명" oninput="goodsLines[${i}].quotation=this.value"></td>
       <td><input type="text" value="${l.qty}" style="text-align:right" oninput="goodsLines[${i}].qty=this.value;calcGoodsTotal()"></td>
       <td><input type="text" value="${l.amount?Number(l.amount).toLocaleString():''}" style="text-align:right" oninput="fmtInput(this);goodsLines[${i}].amount=parseComma(this.value);calcGoodsTotal()"></td>
       <td><button class="btn-del" onclick="deleteGoodsLine(${i})">✕</button></td>
     </tr>`).join('');
   calcGoodsTotal();
 }
+// ── 통화/환율 (ACC Voucher와 동일 파일 acc_voucher_exchange.xlsx 재사용) ──
+function getSelectedCurrency(){ return (document.getElementById('v-currency')||{value:'KRW'}).value || 'KRW'; }
+function getSelectedExRate(){
+  const cur = getSelectedCurrency();
+  if(cur==='KRW') return 1;
+  return parseFloat((document.getElementById('v-exrate')||{value:0}).value)||0;
+}
+function onCurrencyChange(){
+  const cur = getSelectedCurrency();
+  const grp = document.getElementById('v-exrate-group');
+  if(grp) grp.style.display = cur==='KRW' ? 'none' : '';
+  if(cur!=='KRW' && window._cachedExRates && window._cachedExRates[cur]){
+    const exEl = document.getElementById('v-exrate');
+    if(exEl) exEl.value = window._cachedExRates[cur];
+  }
+  calcGoodsTotal(); calcAccTotal();
+}
+async function loadExchangeRates(){
+  try{
+    if(!siteId){ const s=await api('/sites/'+SITE_PATH_DB); siteId=s.id; }
+    const t=await token();
+    const res=await fetch(GRAPH+'/sites/'+siteId+'/drive/root:/acc_voucher_exchange.xlsx:/content',{headers:{Authorization:'Bearer '+t}});
+    if(!res.ok) throw new Error('환율 파일 로드 실패');
+    const buf=await res.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array',cellDates:false});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:null,raw:true});
+    const hRow=rows[0];
+    const currencies=hRow.slice(1).map(c=>(c||'').toString().trim()).filter(Boolean);
+    const all=[];
+    for(let i=1;i<rows.length;i++){
+      const r=rows[i]; if(!r[0]) continue;
+      let dateStr='';
+      if(typeof r[0]==='number'){ const d=new Date(Math.round((r[0]-25569)*86400*1000)); dateStr=d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0'); }
+      else dateStr=(r[0]||'').toString().slice(0,10);
+      currencies.forEach((c,ci)=>{ const raw=r[ci+1]; const rate=(raw!=null&&String(raw).trim()!=='')?parseFloat(raw)||0:null; if(rate!==null) all.push({date:dateStr,currency:c,rate}); });
+    }
+    const kst=new Date(new Date().getTime()+9*3600*1000);
+    const today=kst.toISOString().slice(0,10);
+    let use=all.filter(r=>r.date===today && r.rate>0);
+    if(!use.length){ const past=[...new Set(all.filter(r=>r.date<today).map(r=>r.date))].sort(); const last=past[past.length-1]; if(last) use=all.filter(r=>r.date===last); }
+    window._cachedExRates={};
+    use.forEach(r=>{ window._cachedExRates[r.currency]=r.rate; });
+    console.log('[Exchange] Loaded:', Object.keys(window._cachedExRates).length);
+  }catch(e){ console.warn('환율 로드 실패:', e.message); }
+}
+
 function calcGoodsTotal(){
+  const cur = getSelectedCurrency();
+  const rate = getSelectedExRate();
   const total = goodsLines.reduce((s,l)=>s+(parseFloat(l.amount)||0)*(parseFloat(l.qty)||1),0);
-  document.getElementById('v-goods-total').value = total.toLocaleString();
-  document.getElementById('goods-total-display').textContent = total.toLocaleString();
+  if(cur==='KRW'){
+    document.getElementById('v-goods-total').dataset.raw = total;
+    document.getElementById('goods-total-display').textContent = total.toLocaleString();
+  } else {
+    const krw = Math.round(total*rate);
+    document.getElementById('goods-total-display').innerHTML = `${total.toLocaleString()} ${cur}<br><span style="font-size:12px;color:#605e5c">≈ ${krw.toLocaleString()} KRW</span>`;
+  }
+  checkGoodsAccMatch();
   renderApprovalPreview();
 }
 
@@ -1061,12 +1072,48 @@ function renderAccLines(){
   calcAccTotal();
 }
 function calcAccTotal(){
-  const total = accLines.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
-  document.getElementById('acc-total-display').textContent = total.toLocaleString();
+  const cur = getSelectedCurrency();
+  const rate = getSelectedExRate();
+  const totalIncl = accLines.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
+  const vatAmt = accLines.filter(l=>l.isVat).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
+  const totalExcl = totalIncl - vatAmt;
+  const fmtDual = (amt) => {
+    if(cur==='KRW') return amt.toLocaleString();
+    const krw = Math.round(amt*rate);
+    return `${amt.toLocaleString()} ${cur} <span style="font-size:11px;color:#605e5c">(≈ ${krw.toLocaleString()} KRW)</span>`;
+  };
+  document.getElementById('acc-total-incl-display').innerHTML = fmtDual(totalIncl);
+  document.getElementById('acc-total-excl-display').innerHTML = fmtDual(totalExcl);
+  checkGoodsAccMatch();
+}
+// ── 2.Description of Goods 합계 vs 4.Accounting Information 합계 일치 여부 검증 (ACC Voucher의 DR/CR 일치 검증과 동일한 개념) ──
+function checkGoodsAccMatch(){
+  const goodsTotal = goodsLines.reduce((s,l)=>s+(parseFloat(l.amount)||0)*(parseFloat(l.qty)||1),0);
+  const accIncl = accLines.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
+  const vatAmt = accLines.filter(l=>l.isVat).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
+  const accExcl = accIncl - vatAmt;
+  const banner = document.getElementById('acc-goods-match-banner');
+  const totalField = document.getElementById('v-goods-total');
+  const cur = getSelectedCurrency();
+  if(!goodsTotal || !accIncl){
+    if(banner) banner.innerHTML = '<span style="color:#a19f9d">2. Description of Goods와 4. Accounting Information에 금액을 모두 입력하면 일치 여부가 표시됩니다.</span>';
+    if(totalField) totalField.value = '2, 4번 항목 금액 입력 후 확인됩니다';
+    return;
+  }
+  const match = Math.abs(goodsTotal-accIncl) < 1;
+  if(match){
+    if(banner) banner.innerHTML = '<span style="color:#107c10;font-weight:600">✓ Description of Goods 합계와 일치합니다</span>';
+    if(totalField) totalField.value = accExcl.toLocaleString()+(cur!=='KRW'?(' '+cur):'');
+  } else {
+    if(banner) banner.innerHTML = '<span style="color:#a4262c;font-weight:600">✗ Description of Goods 합계와 일치하지 않습니다 (차이: '+Math.round(goodsTotal-accIncl).toLocaleString()+' '+cur+')</span>';
+    if(totalField) totalField.value = '금액 불일치 — 2번과 4번의 합계를 맞춰주세요';
+  }
 }
 function fmtInput(el){ const raw=el.value.replace(/,/g,'').replace(/[^0-9.]/g,''); el.value = raw?Number(raw).toLocaleString():''; }
 function parseComma(str){ return parseFloat((str||'').toString().replace(/,/g,''))||0; }
 function escAttr(s){ return (s==null?'':String(s)).replace(/"/g,'&quot;'); }
+// 계정 표시이름("이준순 스타트럭코리아 IT(Junsoon Lee)")에서 맨앞 한글 이름만 추출 (ACC Voucher와 동일 로직)
+function koreanName(s){ const m=String(s||'').match(/^[가-힣]+/); return m ? m[0] : (s||'-'); }
 
 // ── GL 검색 모달 ──
 function openGlModal(idx){
@@ -1194,7 +1241,11 @@ function needed(rule, amt){
   return true;
 }
 function totalAmountKRW(){
-  return goodsLines.reduce((s,l)=>s+(parseFloat(l.amount)||0)*(parseFloat(l.qty)||1),0);
+  const raw = goodsLines.reduce((s,l)=>s+(parseFloat(l.amount)||0)*(parseFloat(l.qty)||1),0);
+  const cur = getSelectedCurrency();
+  if(cur==='KRW') return raw;
+  const rate = getSelectedExRate();
+  return Math.round(raw*rate);
 }
 function buildApprovers(){
   const rules = APPROVAL_RULES.PR;
@@ -1326,20 +1377,6 @@ async function loadExistingPR() {
     document.getElementById('v-dept').value = f.Department||'';
     document.getElementById('v-phone-ext').value = f.PhoneExt||'';
 
-    document.getElementById('v-vendor-type').value = f.VendorType==='new' ? 'new' : 'existing';
-    toggleVendorType();
-    if(f.VendorType==='new'){
-      document.getElementById('v-vendor-new-name').value = f.VendorName||'';
-      document.getElementById('v-vendor-new-addr').value = f.VendorAddress||'';
-      document.getElementById('v-vendor-new-tel').value = f.VendorTel||'';
-      document.getElementById('v-vendor-new-fax').value = f.VendorFax||'';
-    } else {
-      document.getElementById('v-vendor-code').value = f.VendorNo||'';
-      document.getElementById('v-vendor-name').value = f.VendorName||'';
-      document.getElementById('v-vendor-tel').value = f.VendorTel||'';
-      document.getElementById('v-vendor-bizno').value = f.VendorBizNo||'';
-    }
-
     const remarksArr = (f.Remarks||'').split(';').map(s=>s.trim()).filter(Boolean);
     document.getElementById('r-onetime').checked = remarksArr.includes('Onetime payment');
     document.getElementById('r-partial').checked = remarksArr.includes('Partial payment');
@@ -1347,14 +1384,19 @@ async function loadExistingPR() {
     document.getElementById('r-gr').checked = remarksArr.includes('GR Required');
 
     try { goodsLines = JSON.parse(f.GoodsJSON||'[]'); } catch(e){ goodsLines=[]; }
-    if(!goodsLines.length) goodsLines = [{desc:'',quotation:'',qty:1,amount:0}];
+    if(!goodsLines.length) goodsLines = [{desc:'',qty:1,amount:0}];
     try { accLines = JSON.parse(f.AccountLinesJSON||'[]'); } catch(e){ accLines=[]; }
     if(!accLines.length) accLines = [{itemDesc:'',gl:'',glName:'',cctr:'',cctrName:'',amount:0,isVat:false}];
+
+    // Currency는 복원하되 Exchange Rate는 오늘 기준 환율을 그대로 사용 (ACC Voucher와 동일 정책)
+    const curEl = document.getElementById('v-currency');
+    if(curEl) curEl.value = f.Currency||'KRW';
+    onCurrencyChange();
 
     renderGoodsLines(); renderAccLines(); renderFileList(); renderApprovalPreview();
     document.getElementById('pr-id-badge').textContent = `(${titleVal} 기반 불러옴)`;
     titleInput.value = '';
-    showAlert('PR을 불러왔습니다.', '첨부파일은 새로 첨부해주세요.', '✅');
+    showAlert('PR을 불러왔습니다.', 'Exchange Rate는 오늘 기준 환율을 그대로 사용합니다.\n첨부파일은 새로 첨부해주세요.', '✅');
   } catch(e) {
     console.error('loadExistingPR error:', e);
     showAlert('PR 불러오기 실패', e.message, '⚠️');
@@ -1362,7 +1404,7 @@ async function loadExistingPR() {
 }
 
 function resetForm(){
-  goodsLines = [{desc:'',quotation:'',qty:1,amount:0}];
+  goodsLines = [{desc:'',qty:1,amount:0}];
   accLines = [{itemDesc:'',gl:'',glName:'',cctr:'',cctrName:'',amount:0,isVat:false}];
   prFiles = [];
   _dynApproverState = {};
@@ -1370,17 +1412,9 @@ function resetForm(){
   document.getElementById('v-category').value='';
   document.getElementById('v-dept').value='';
   document.getElementById('v-phone-ext').value='';
-  document.getElementById('v-vendor-type').value='existing';
-  document.getElementById('v-vendor-code').value='';
-  document.getElementById('v-vendor-name').value='';
-  document.getElementById('v-vendor-tel').value='';
-  document.getElementById('v-vendor-bizno').value='';
-  document.getElementById('v-vendor-new-name').value='';
-  document.getElementById('v-vendor-new-addr').value='';
-  document.getElementById('v-vendor-new-tel').value='';
-  document.getElementById('v-vendor-new-fax').value='';
   ['r-onetime','r-partial','r-po','r-gr'].forEach(id=>document.getElementById(id).checked=false);
-  toggleVendorType();
+  const curEl = document.getElementById('v-currency');
+  if(curEl){ curEl.value='KRW'; onCurrencyChange(); }
   renderGoodsLines(); renderAccLines(); renderFileList(); renderApprovalPreview();
 }
 
@@ -1388,8 +1422,17 @@ function resetForm(){
 async function savePR(status){
   const category = document.getElementById('v-category').value;
   if(status==='대기' && !category){ showAlert('입력 확인', 'Purchase Category를 선택해주세요.', '⚠️'); return; }
+  if(status==='대기' && !document.getElementById('v-dept').value.trim()){ showAlert('입력 확인', 'Department를 입력해주세요.', '⚠️'); return; }
   const amt = totalAmountKRW();
   if(status==='대기' && amt<=0){ showAlert('입력 확인', 'Description of Goods에 금액을 입력해주세요.', '⚠️'); return; }
+  if(status==='대기'){
+    const goodsTotal = goodsLines.reduce((s,l)=>s+(parseFloat(l.amount)||0)*(parseFloat(l.qty)||1),0);
+    const accIncl = accLines.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
+    if(Math.abs(goodsTotal-accIncl) >= 1){
+      showAlert('금액 불일치', 'Description of Goods 합계와 Accounting Information 합계가 일치하지 않습니다.\n두 항목의 합계를 맞춰주세요.', '⚠️');
+      return;
+    }
+  }
 
   const approvers = buildApprovers();
   if(status==='대기'){
@@ -1406,8 +1449,6 @@ async function savePR(status){
   const dateStr = kst.toISOString().slice(0,10);
   let prId = 'CTR-PR-'+dateStr+'_ID-TEMP';
 
-  const vendorType = document.getElementById('v-vendor-type').value;
-
   const remarks = [];
   if(document.getElementById('r-onetime').checked) remarks.push('Onetime payment');
   if(document.getElementById('r-partial').checked) remarks.push('Partial payment');
@@ -1416,6 +1457,9 @@ async function savePR(status){
 
   const vatAmt = accLines.filter(l=>l.isVat).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
   const accTotal = accLines.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
+  const _cur = getSelectedCurrency();
+  const _rate = getSelectedExRate();
+  const accTotalKRW = _cur==='KRW' ? accTotal : Math.round(accTotal*_rate);
 
   const fields = {
     Title: prId,
@@ -1430,14 +1474,9 @@ async function savePR(status){
     TotalAmount: amt,
     AccountLinesJSON: JSON.stringify(accLines),
     VATAmount: vatAmt,
-    TotalKRW: Math.round(accTotal||amt),
-    VendorType: vendorType,
-    VendorNo: vendorType==='existing'?document.getElementById('v-vendor-code').value:'',
-    VendorName: vendorType==='existing'?document.getElementById('v-vendor-name').value:document.getElementById('v-vendor-new-name').value,
-    VendorAddress: vendorType==='new'?document.getElementById('v-vendor-new-addr').value:'',
-    VendorTel: vendorType==='existing'?document.getElementById('v-vendor-tel').value:document.getElementById('v-vendor-new-tel').value,
-    VendorBizNo: vendorType==='existing'?document.getElementById('v-vendor-bizno').value:'',
-    VendorFax: vendorType==='new'?document.getElementById('v-vendor-new-fax').value:'',
+    TotalKRW: Math.round(accTotalKRW||amt),
+    Currency: _cur,
+    ExchangeRate: _cur==='KRW' ? 1 : _rate,
     Remarks: remarks.join(';'),
     SubmittedDate: status==='대기'?new Date().toISOString():null,
     CurrentStep: status==='대기'?1:0,
@@ -1720,6 +1759,7 @@ async function openDetail(spId, fromTab){
     <div class="det-row"><div class="det-lbl">Requester</div><div class="det-val">${v.RequesterName||'-'} (${v.RequesterEmail||'-'})</div></div>
     <div class="det-row"><div class="det-lbl">Department / Cost Center</div><div class="det-val">${v.Department||'-'} / ${v.CostCenter||'-'}</div></div>
     <div class="det-row"><div class="det-lbl">제출일</div><div class="det-val">${(v.SubmittedDate||'').slice(0,10)||'-'}</div></div>
+    ${(v.Currency && v.Currency!=='KRW') ? `<div class="det-row"><div class="det-lbl">Currency / Exchange Rate</div><div class="det-val">${v.Currency} / ${v.ExchangeRate||'-'}</div></div>` : ''}
     <div class="det-row"><div class="det-lbl">상태</div><div class="det-val"><span class="badge-${(v.Status||'').replace(/[()]/g,'')}">${v.Status||'-'}</span></div></div>
 
     <div class="det-sec">Description of Goods</div>
@@ -1728,10 +1768,6 @@ async function openDetail(spId, fromTab){
 
     <div class="det-sec">Accounting Information</div>
     ${accL.map(l=>`<div class="det-row"><div class="det-lbl">${l.glName||'-'} (${l.gl||'-'})</div><div class="det-val">${l.cctrName||l.cctr?((l.cctrName||l.cctr)+' · '):''}${Math.round(l.amount||0).toLocaleString()} KRW</div></div>`).join('')||'<div class="det-row"><div class="det-val">없음</div></div>'}
-
-    <div class="det-sec">Vendor Details</div>
-    <div class="det-row"><div class="det-lbl">Type</div><div class="det-val">${v.VendorType==='new'?'New Vendor':'Existing Vendor'}</div></div>
-    <div class="det-row"><div class="det-lbl">Vendor</div><div class="det-val">${v.VendorNo?v.VendorNo+' · ':''}${v.VendorName||'-'}</div></div>
 
     <div class="det-sec">Remarks</div>
     <div class="det-row"><div class="det-val">${(v.Remarks||'').split(';').filter(Boolean).join(', ')||'-'}</div></div>
@@ -1849,12 +1885,10 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
   const rules = APPROVAL_RULES.PR;
   const NA='<span style="display:inline-block;background:#e1dfdd;color:#484644;font-size:8px;font-weight:800;padding:2px 6px;border-radius:3px">N/A</span>';
   const fmtDT = s => { if(!s) return ''; const d=new Date(s); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; };
-  const koreanName = s => { const m=String(s||'').match(/^[가-힣]+/); return m ? m[0] : (s||'-'); };
   const requesterKoName = koreanName(v.RequesterName);
 
   const goodsRows = (goods||[]).map(g=>`<tr>
     <td style="${cellB};text-align:left">${esc(g.desc)}</td>
-    <td style="${cellB};text-align:center">${esc(g.quotation)}</td>
     <td style="${cellB};text-align:center">${g.qty||1}</td>
     <td style="${cellB};text-align:right">${fmtK((g.amount||0)*(g.qty||1))}</td>
   </tr>`).join('');
@@ -1869,6 +1903,7 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
     <td style="${cellB};text-align:right">${fmtK(l.amount)}</td>
   </tr>`).join('');
   const accTotal = (accL||[]).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
+  const accVat = (accL||[]).filter(l=>l.isVat).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
 
   const apprRow = roleCols.map(rc=>{
     const role=rc[0]; const a=apprByRole[role];
@@ -1893,13 +1928,14 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
     <div style="text-align:center;font-weight:600;font-size:12px;border:2px solid #000;border-top:none;padding:6px">Purchase Requisition</div>
     <table style="width:100%;border-collapse:collapse;border:1px solid #000;border-top:none">
       <tr><td style="${lblB}">Submission Date</td><td style="${cellB}">${fmtDT(v.SubmittedDate)}</td>
-          <td style="${lblB}">Purchase Category</td><td style="${cellB}">${esc(v.PurchaseCategory)}</td></tr>
+          <td style="${lblB}">Purchase Category</td><td style="${cellB}">${esc(v.PurchaseCategory)}</td>
+          <td style="${lblB}">Currency</td><td style="${cellB}">${esc(v.Currency||'KRW')}${(v.Currency&&v.Currency!=='KRW')?' (환율 '+esc(v.ExchangeRate)+')':''}</td></tr>
     </table>
     <div style="font-weight:700;font-size:11px;margin-top:8px;border:1px solid #000;padding:4px 6px;background:#f0f0f0">Description of Goods</div>
     <table style="width:100%;border-collapse:collapse;border:1px solid #000;border-top:none">
-      <tr><td style="${lblB};text-align:center">Description of Goods</td><td style="${lblB};text-align:center">Quotation</td><td style="${lblB};text-align:center">Quantity</td><td style="${lblB};text-align:center">Amount</td></tr>
+      <tr><td style="${lblB};text-align:center">Description of Goods</td><td style="${lblB};text-align:center">Quantity</td><td style="${lblB};text-align:center">Amount</td></tr>
       ${goodsRows}
-      <tr><td colspan="3" style="${cellB};text-align:right;font-weight:700">TOTAL AMOUNT (incl. VAT)</td><td style="${cellB};text-align:right;font-weight:700">${fmtK(goodsTotal)}</td></tr>
+      <tr><td colspan="2" style="${cellB};text-align:right;font-weight:700">TOTAL AMOUNT (Excl. VAT)</td><td style="${cellB};text-align:right;font-weight:700">${esc(v.Currency||'KRW')} ${fmtK(goodsTotal)}${(v.Currency&&v.Currency!=='KRW'&&v.ExchangeRate)?' (≈ '+fmtK(goodsTotal*v.ExchangeRate)+' KRW)':''}</td></tr>
     </table>
     <div style="font-weight:700;font-size:11px;margin-top:8px;border:1px solid #000;padding:4px 6px;background:#f0f0f0">Requester</div>
     <table style="width:100%;border-collapse:collapse;border:1px solid #000;border-top:none;table-layout:fixed">
@@ -1927,14 +1963,8 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
     <table style="width:100%;border-collapse:collapse;border:1px solid #000;border-top:none">
       <tr><td style="${lblB};text-align:center">Item Description</td><td style="${lblB};text-align:center">G/L Acc. Description</td><td style="${lblB};text-align:center">G/L Acc. No.</td><td style="${lblB};text-align:center">Cost Center</td><td style="${lblB};text-align:center">Currency</td><td style="${lblB};text-align:center">Amount</td></tr>
       ${accRows}
-      <tr><td colspan="5" style="${cellB};text-align:right;font-weight:700">Total</td><td style="${cellB};text-align:right;font-weight:700">${fmtK(accTotal)}</td></tr>
-    </table>
-    <div style="font-weight:700;font-size:11px;margin-top:8px;border:1px solid #000;padding:4px 6px;background:#f0f0f0">Vendor Details (${v.VendorType==='new'?'New Vendor':'Existing Vendor'})</div>
-    <table style="width:100%;border-collapse:collapse;border:1px solid #000;border-top:none">
-      <tr><td style="${lblB}">Vendor No.</td><td style="${cellB}">${esc(v.VendorNo)}</td>
-          <td style="${lblB}">Vendor Name</td><td style="${cellB}">${esc(v.VendorName)}</td></tr>
-      <tr><td style="${lblB}">Tel. No.</td><td style="${cellB}">${esc(v.VendorTel)}</td>
-          <td style="${lblB}">Business No.</td><td style="${cellB}">${esc(v.VendorBizNo)}</td></tr>
+      <tr><td colspan="5" style="${cellB};text-align:right;font-weight:700">TOTAL (Incl. VAT)</td><td style="${cellB};text-align:right;font-weight:700">${fmtK(accTotal)}</td></tr>
+      <tr><td colspan="5" style="${cellB};text-align:right;font-weight:700">TOTAL (Excl. VAT)</td><td style="${cellB};text-align:right;font-weight:700">${fmtK(accTotal-accVat)}</td></tr>
     </table>
     <div style="font-weight:700;font-size:11px;margin-top:8px;border:1px solid #000;padding:4px 6px;background:#f0f0f0">Remarks</div>
     <div style="border:1px solid #000;border-top:none;padding:6px 8px;font-size:10.5px">${esc((v.Remarks||'').split(';').filter(Boolean).join(', ')||'-')}</div>
