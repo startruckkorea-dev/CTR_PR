@@ -282,6 +282,25 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
 
     <div class="card">
       <div class="section-title">2. Description of Goods</div>
+      <div class="form-row" style="margin-bottom:6px">
+        <div class="form-group">
+          <label>Currency</label>
+          <select id="v-currency-2" onchange="onCurrencyChange('goods')">
+            <option value="KRW">KRW</option>
+            <option value="EUR">EUR</option>
+            <option value="USD">USD</option>
+            <option value="SGD">SGD</option>
+            <option value="JPY">JPY</option>
+            <option value="CNY">CNY</option>
+          </select>
+        </div>
+        <div class="form-group" id="v-exrate-group-2" style="display:none">
+          <label>Exchange Rate <span id="v-exrate-hint-2" style="font-size:10px;color:#605e5c;font-weight:400">— 오늘 기준 자동 입력</span></label>
+          <input type="number" id="v-exrate-2" placeholder="환율" step="0.0001" oninput="onExRateInput('goods')">
+        </div>
+      </div>
+      <div id="ex-rate-banner-goods"></div>
+      <div style="margin-bottom:14px"></div>
       <div class="lines-header">
         <span style="font-size:12px;color:#605e5c">품목/견적/수량/단가를 입력하세요 (Unit Price × Quantity가 자동으로 합산됩니다)</span>
         <button class="btn-add" onclick="addGoodsLine()">+ 라인 추가</button>
@@ -327,10 +346,10 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
 
     <div class="card">
       <div class="section-title">4. Accounting Information</div>
-      <div class="form-row" style="margin-bottom:10px">
+      <div class="form-row" style="margin-bottom:6px">
         <div class="form-group">
           <label>Currency</label>
-          <select id="v-currency" onchange="onCurrencyChange()">
+          <select id="v-currency" onchange="onCurrencyChange('acc')">
             <option value="KRW">KRW</option>
             <option value="EUR">EUR</option>
             <option value="USD">USD</option>
@@ -340,10 +359,12 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
           </select>
         </div>
         <div class="form-group" id="v-exrate-group" style="display:none">
-          <label>Exchange Rate <span style="font-size:10px;color:#605e5c;font-weight:400">— 오늘 기준 자동 입력</span></label>
-          <input type="number" id="v-exrate" placeholder="환율" step="0.0001" oninput="calcGoodsTotal();calcAccTotal()">
+          <label>Exchange Rate <span id="v-exrate-hint" style="font-size:10px;color:#605e5c;font-weight:400">— 오늘 기준 자동 입력</span></label>
+          <input type="number" id="v-exrate" placeholder="환율" step="0.0001" oninput="onExRateInput('acc')">
         </div>
       </div>
+      <div id="ex-rate-banner-acc"></div>
+      <div style="margin-bottom:14px"></div>
       <div class="lines-header">
         <span style="font-size:12px;color:#605e5c">G/L Account · Cost Center · 금액을 입력하세요 (VAT 라인은 자동 추가)</span>
         <button class="btn-add" onclick="addAccLine()">+ 라인 추가</button>
@@ -983,15 +1004,59 @@ function getSelectedExRate(){
   if(cur==='KRW') return 1;
   return parseFloat((document.getElementById('v-exrate')||{value:0}).value)||0;
 }
-function onCurrencyChange(){
+function _syncCurrencyUI(){
   const cur = getSelectedCurrency();
-  const grp = document.getElementById('v-exrate-group');
-  if(grp) grp.style.display = cur==='KRW' ? 'none' : '';
+  const rate = document.getElementById('v-exrate')?.value || '';
+  ['v-currency','v-currency-2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=cur; });
+  ['v-exrate','v-exrate-2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=rate; });
+  ['v-exrate-group','v-exrate-group-2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display = cur==='KRW' ? 'none' : ''; });
+  ['v-exrate-hint','v-exrate-hint-2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent = cur==='KRW' ? '' : `— ${cur} 기준 자동 입력`; });
+}
+function onCurrencyChange(source){
+  const srcSel = source==='goods' ? document.getElementById('v-currency-2') : document.getElementById('v-currency');
+  const cur = srcSel ? srcSel.value : 'KRW';
+  const primary = document.getElementById('v-currency');
+  if(primary) primary.value = cur;
   if(cur!=='KRW' && window._cachedExRates && window._cachedExRates[cur]){
     const exEl = document.getElementById('v-exrate');
     if(exEl) exEl.value = window._cachedExRates[cur];
+  } else if(cur==='KRW'){
+    const exEl = document.getElementById('v-exrate');
+    if(exEl) exEl.value = '';
   }
+  _syncCurrencyUI();
+  renderExRateBanner();
   calcGoodsTotal(); calcAccTotal();
+}
+function onExRateInput(source){
+  const srcEl = source==='goods' ? document.getElementById('v-exrate-2') : document.getElementById('v-exrate');
+  const val = srcEl ? srcEl.value : '';
+  const primary = document.getElementById('v-exrate');
+  if(primary) primary.value = val;
+  const mirror = document.getElementById('v-exrate-2');
+  if(mirror) mirror.value = val;
+  calcGoodsTotal(); calcAccTotal();
+}
+// ── 참고 환율 배너 (ACC Voucher와 동일한 스타일) — 2. Description of Goods / 4. Accounting Information 양쪽에 표시 ──
+function renderExRateBanner(){
+  const cur = getSelectedCurrency();
+  const targets = ['ex-rate-banner-goods','ex-rate-banner-acc'];
+  if(cur==='KRW' || !window._cachedExRates){
+    targets.forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=''; });
+    return;
+  }
+  const kst=new Date(new Date().getTime()+9*3600*1000);
+  const today=kst.toISOString().slice(0,10);
+  const parts = ['EUR','USD','SGD','JPY','CNY'].map(c=>{
+    const r = window._cachedExRates[c];
+    return r ? `<span><b>${c}</b> ${Number(r).toLocaleString()}</span>` : '';
+  }).filter(Boolean).join('<span style="color:#d2d0ce;margin:0 4px">|</span>');
+  const html = `<div style="background:#f0f6ff;border:1px solid #c7e0f4;border-radius:4px;padding:8px 14px;margin-top:2px">
+    <div style="margin-bottom:2px"><span style="color:#0078d4;font-weight:600;font-size:12px">${today} 기준 참고 환율</span><span style="font-size:11px;color:#a19f9d;margin-left:8px">오늘 날짜 환율로 자동 기입</span></div>
+    <div style="font-size:11px;color:#a19f9d;margin-bottom:4px">· 수정 필요 시 BU Admin 확인 후 입력</div>
+    <div style="font-size:12px;color:#323130">${parts||'<span style=\"color:#a19f9d\">참고 환율 정보를 불러오지 못했습니다.</span>'}</div>
+  </div>`;
+  targets.forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=html; });
 }
 async function loadExchangeRates(){
   try{
@@ -1019,6 +1084,7 @@ async function loadExchangeRates(){
     window._cachedExRates={};
     use.forEach(r=>{ window._cachedExRates[r.currency]=r.rate; });
     console.log('[Exchange] Loaded:', Object.keys(window._cachedExRates).length);
+    renderExRateBanner();
   }catch(e){ console.warn('환율 로드 실패:', e.message); }
 }
 
@@ -1031,7 +1097,7 @@ function calcGoodsTotal(){
     document.getElementById('goods-total-display').textContent = total.toLocaleString();
   } else {
     const krw = Math.round(total*rate);
-    document.getElementById('goods-total-display').innerHTML = `${total.toLocaleString()} ${cur}<br><span style="font-size:12px;color:#605e5c">≈ ${krw.toLocaleString()} KRW</span>`;
+    document.getElementById('goods-total-display').innerHTML = `${total.toLocaleString()} <span style="font-size:14px">${cur}</span> <span style="font-size:12px;font-weight:400;color:#605e5c">(≈ ${krw.toLocaleString()} KRW)</span>`;
   }
   checkGoodsAccMatch();
   renderApprovalPreview();
