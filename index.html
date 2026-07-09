@@ -1423,7 +1423,7 @@ async function savePR(status){
         for(const file of prFiles){
           try{
             const buf=await file.arrayBuffer();
-            const res=await fetch(GRAPH+'/drives/'+drive.id+'/root:/CTR_PR_AttachedFiles/'+prId+'/'+encodeURIComponent(file.name)+':/content',
+            const res=await fetch(GRAPH+'/drives/'+drive.id+'/root:/CTR-PR_AttachedFiles/'+prId+'/'+encodeURIComponent(file.name)+':/content',
               {method:'PUT',headers:{Authorization:'Bearer '+t,'Content-Type':file.type||'application/octet-stream'},body:buf});
             if(res.ok){
               const u=await res.json();
