@@ -585,6 +585,8 @@ const SCOPES = ['User.Read','Sites.ReadWrite.All','Files.ReadWrite.All'];
 const BP_FILE_NAME = 'Master data List 2014_Final(DTK).xlsx';
 
 let msal_g = null, user = null, siteId = null, nasId = null;
+let employeeData = []; // Team Leader/Department Head 동적 선택용 (employee_search.xlsx, GW와 동일 파일)
+let _dynApproverState = {}; // {role: {dept, team, email}} — 재렌더링되어도 선택값 유지
 let bpData = [];
 let goodsLines = [];   // {desc, quotation, qty, amount}
 let accLines = [];     // {itemDesc, gl, glName, cctr, cctrName, amount, isVat}
@@ -649,6 +651,24 @@ async function loadGLMaster() {
   } catch(e) {
     console.warn('[COA_PC] GL 로드 실패, 폴백 목록 사용:', e.message);
   }
+}
+
+// ── 직원 검색 데이터 (Team Leader/Department Head 동적 선택용, GW와 동일한 employee_search.xlsx 재사용) ──
+async function loadEmployees(){
+  try{
+    if(!siteId) { const s=await api('/sites/'+SITE_PATH_DB); siteId=s.id; }
+    const drivesData=await api('/sites/'+siteId+'/drives');
+    const docDrive=drivesData.value.find(d=>['문서','Documents','Shared Documents'].includes(d.name))||drivesData.value[0];
+    const t=await token();
+    const res=await fetch(GRAPH+'/drives/'+docDrive.id+'/root:/employee_search.xlsx:/content',{headers:{Authorization:'Bearer '+t}});
+    if(!res.ok)throw new Error('직원 데이터 로드 실패 (HTTP '+res.status+')');
+    const buf=await res.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array'});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    employeeData=rows.map(r=>({dept:r['Department']||'',team:r['Team']||'',name:r['EngName']||'',email:(r['EMail']||r['email']||'')})).filter(r=>r.email&&r.name);
+    console.log('[employee_search] 로드 완료:', employeeData.length);
+    renderApprovalPreview(); // 이미 그려진 드롭다운이 있으면 옵션 채워서 다시 그림
+  }catch(e){ console.warn('직원 데이터 로드 실패:', e.message); }
 }
 
 // PR 결재 매트릭스 (F&C Controlling PR 양식 기준: Team Leader/Dept Head는 소액, CEO/RD/CFO는 고액 에스컬레이션, Budget Controller/Controlling Manager는 항상 필수)
@@ -780,6 +800,7 @@ async function boot(account) {
   loadCCTRMaster(account.name).catch(e=>console.warn('CCTR 로드 실패:', e.message));
   loadBPMaster().catch(e=>console.warn('BP 마스터 로드 실패:', e.message));
   loadGLMaster().catch(e=>console.warn('GL 마스터 로드 실패:', e.message));
+  loadEmployees().catch(e=>console.warn('직원 데이터 로드 실패:', e.message));
 
   loadSystemConfig().then(cfg=>{
     if(!cfg) return;
@@ -1189,7 +1210,7 @@ function renderApprovalPreview(){
   el.innerHTML = approvers.map(a=>{
     const fixedTag = a.fixed
       ? `<span style="font-size:10px;color:#107c10;background:#dff6dd;border-radius:10px;padding:1px 6px;margin-left:4px">자동 지정</span>`
-      : `<span style="font-size:10px;color:#8a6914;background:#fff4ce;border-radius:10px;padding:1px 6px;margin-left:4px">직접 입력</span>`;
+      : `<span style="font-size:10px;color:#8a6914;background:#fff4ce;border-radius:10px;padding:1px 6px;margin-left:4px">직접 선택</span>`;
     if(a.fixed){
       return `<div class="appr-block appr-fixed">
         <div class="appr-block-title">${a.order}차 결재자${fixedTag} <span class="hint">— ${a.label}</span></div>
@@ -1198,13 +1219,51 @@ function renderApprovalPreview(){
           <input type="email" value="${escAttr(a.email)}" readonly placeholder="이메일 (config 미설정 시 비어있음)">
         </div></div>`;
     }
+    // Team Leader/Department Head 등 직접 선택 대상 — GW와 동일하게 employee_search.xlsx 기반 부서/팀/직원 드롭다운 제공
+    const st = _dynApproverState[a.role] || {dept:'', team:'', email:''};
+    const depts = [...new Set(employeeData.map(e=>e.dept))].sort();
+    const teams = st.dept ? [...new Set(employeeData.filter(e=>e.dept===st.dept).map(e=>e.team))].sort() : [];
+    const persons = (st.dept && st.team) ? employeeData.filter(e=>e.dept===st.dept && e.team===st.team) : [];
+    const picked = st.email ? employeeData.find(e=>e.email===st.email) : null;
     return `<div class="appr-block">
       <div class="appr-block-title">${a.order}차 결재자 <span class="req-mark">*</span>${fixedTag} <span class="hint">— ${a.label}</span></div>
+      <div class="appr-select-row">
+        <select id="ctr${a.order}-dept" onchange="ctrDeptChange('${a.role}',${a.order})" ${employeeData.length?'':'disabled'}>
+          <option value="">부서${employeeData.length?'':' (로딩중...)'}</option>
+          ${depts.map(d=>`<option value="${escAttr(d)}" ${d===st.dept?'selected':''}>${d}</option>`).join('')}
+        </select>
+        <select id="ctr${a.order}-team" onchange="ctrTeamChange('${a.role}',${a.order})" ${st.dept?'':'disabled'}>
+          <option value="">팀</option>
+          ${teams.map(t=>`<option value="${escAttr(t)}" ${t===st.team?'selected':''}>${t}</option>`).join('')}
+        </select>
+        <select id="ctr${a.order}-person" onchange="ctrPersonChange('${a.role}',${a.order})" ${st.team?'':'disabled'}>
+          <option value="">직원 선택</option>
+          ${persons.map(p=>`<option value="${escAttr(p.email)}" ${p.email===st.email?'selected':''}>${p.name}</option>`).join('')}
+        </select>
+      </div>
       <div class="appr-info">
-        <input type="text"  id="dyn-${a.role}-name"  placeholder="이름" value="${escAttr(a.name==='TBD'?'':a.name)}" oninput="renderApprovalPreview()">
-        <input type="email" id="dyn-${a.role}-email" placeholder="이메일" value="${escAttr(a.email)}" oninput="renderApprovalPreview()">
+        <input type="text"  id="dyn-${a.role}-name"  readonly placeholder="이름" value="${escAttr(picked?picked.name:'')}">
+        <input type="email" id="dyn-${a.role}-email" readonly placeholder="이메일" value="${escAttr(picked?picked.email:'')}">
       </div></div>`;
   }).join('');
+}
+function ctrDeptChange(role, order){
+  const dept = document.getElementById('ctr'+order+'-dept').value;
+  _dynApproverState[role] = {dept, team:'', email:''};
+  renderApprovalPreview();
+  setTimeout(()=>document.getElementById('ctr'+order+'-dept')?.focus(),0);
+}
+function ctrTeamChange(role, order){
+  const team = document.getElementById('ctr'+order+'-team').value;
+  const st = _dynApproverState[role] || {dept:'',team:'',email:''};
+  _dynApproverState[role] = {dept:st.dept, team, email:''};
+  renderApprovalPreview();
+}
+function ctrPersonChange(role, order){
+  const email = document.getElementById('ctr'+order+'-person').value;
+  const st = _dynApproverState[role] || {dept:'',team:'',email:''};
+  _dynApproverState[role] = {dept:st.dept, team:st.team, email};
+  renderApprovalPreview();
 }
 function onCategoryOrAmountChange(){ renderApprovalPreview(); }
 document.addEventListener('DOMContentLoaded', ()=>{
@@ -1266,6 +1325,7 @@ function resetForm(){
   goodsLines = [{desc:'',quotation:'',qty:1,amount:0}];
   accLines = [{itemDesc:'',gl:'',glName:'',cctr:'',cctrName:'',amount:0,isVat:false}];
   prFiles = [];
+  _dynApproverState = {};
   document.getElementById('pr-id-badge').textContent='';
   document.getElementById('v-category').value='';
   document.getElementById('v-dept').value='';
