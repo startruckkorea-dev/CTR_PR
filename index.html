@@ -445,7 +445,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
         <input type="text" id="f-search" placeholder="PR ID, 품목 검색..." oninput="renderList()">
       </div>
       <table class="list-table">
-        <thead><tr><th style="width:44px;text-align:center">No</th><th>PR ID</th><th>Category</th><th>제출일</th><th style="text-align:right">금액(KRW)</th><th>진행</th><th>상태</th><th style="width:90px;text-align:center">Withdraw</th></tr></thead>
+        <thead><tr><th style="width:44px;text-align:center">No</th><th>PR ID</th><th>Category</th><th>G/L Acc.No. / Cost Center</th><th style="text-align:right">금액(KRW)</th><th>상태</th><th>신청일</th><th style="width:90px;text-align:center">Withdraw</th></tr></thead>
         <tbody id="list-body"><tr><td colspan="8" class="list-empty">불러오는 중...</td></tr></tbody>
       </table>
     </div>
@@ -456,8 +456,8 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
     <div class="card">
       <div class="card-title">결재함</div>
       <table class="list-table">
-        <thead><tr><th style="width:44px;text-align:center">No</th><th>PR ID</th><th>Category</th><th>신청자</th><th style="text-align:right">금액(KRW)</th><th>차수</th><th>상태</th><th style="width:120px;text-align:center">처리</th></tr></thead>
-        <tbody id="appr-body"><tr><td colspan="8" class="list-empty">불러오는 중...</td></tr></tbody>
+        <thead><tr><th style="width:44px;text-align:center">No</th><th>PR ID</th><th>Category</th><th>G/L Acc.No. / Cost Center</th><th>신청자</th><th style="text-align:right">금액(KRW)</th><th>차수</th><th>상태</th><th style="width:120px;text-align:center">처리</th></tr></thead>
+        <tbody id="appr-body"><tr><td colspan="9" class="list-empty">불러오는 중...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -480,8 +480,8 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
         <input type="text" id="admin-f-search" placeholder="PR ID, 신청자, 품목 검색..." oninput="renderAdminList()">
       </div>
       <table class="list-table">
-        <thead><tr><th style="width:44px;text-align:center">No</th><th>PR ID</th><th>신청자</th><th>Category</th><th>제출일</th><th style="text-align:right">금액(KRW)</th><th>상태</th></tr></thead>
-        <tbody id="admin-body"><tr><td colspan="7" class="list-empty">불러오는 중...</td></tr></tbody>
+        <thead><tr><th style="width:44px;text-align:center">No</th><th>PR ID</th><th>신청자</th><th>Category</th><th>G/L Acc.No. / Cost Center</th><th style="text-align:right">금액(KRW)</th><th>상태</th><th>신청일</th></tr></thead>
+        <tbody id="admin-body"><tr><td colspan="8" class="list-empty">불러오는 중...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -547,7 +547,10 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
     <button class="modal-close" onclick="closeDetailModal()">✕</button>
     <div class="modal-title" style="display:flex;align-items:center;justify-content:space-between;padding-right:34px">
       <span>신청 상세 내용</span>
-      <button onclick="exportDetailPdf()" style="background:#0078d4;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:.75rem;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">📄 PDF 출력</button>
+      <div style="display:flex;gap:6px">
+        <button id="btn-export-detail-pdf" onclick="exportDetailScreenPdf()" title="화면에 보이는 상세 내용 그대로 PDF 출력" style="background:#fff;color:#0078d4;border:1px solid #0078d4;border-radius:8px;padding:6px 14px;font-size:.75rem;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">📄 상세화면 PDF</button>
+        <button id="btn-export-pdf" onclick="exportDetailPdf()" style="background:#0078d4;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:.75rem;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">📄 공식 양식 PDF</button>
+      </div>
     </div>
     <div id="detail-body"></div>
     <div id="detail-actions" class="btn-row"></div>
@@ -1643,6 +1646,22 @@ function _wdBtnList(spId, status){
   if(status!=='대기') return '';
   return `<button onclick="event.stopPropagation();confirmWithdraw('${spId}')" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 12px;font-size:.75rem;cursor:pointer;font-family:inherit;white-space:nowrap;">Withdraw</button>`;
 }
+// ── 목록용 공통 헬퍼: G/L Acc.No. / Cost Center 요약 표시, 신청일(날짜+시간) ──
+function _glCcSummary(v){
+  let accL = [];
+  try { accL = JSON.parse(v.AccountLinesJSON||'[]'); } catch(e){}
+  const lines = accL.filter(l=>!l.isVat && (l.gl || l.cctr));
+  if(!lines.length) return '-';
+  const first = lines[0];
+  const txt = `${first.gl||'-'} / ${first.cctr||'-'}`;
+  return lines.length>1 ? `${txt} 외 ${lines.length-1}건` : txt;
+}
+function _appliedDateTime(v){
+  if(!v.SubmittedDate) return '-';
+  const d = new Date(v.SubmittedDate);
+  const p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 function renderList(){
   const st = document.getElementById('f-status').value;
   const kw = (document.getElementById('f-search').value||'').toLowerCase();
@@ -1656,10 +1675,10 @@ function renderList(){
       <td style="text-align:center;color:#0078d4;font-weight:600">${idx+1}</td>
       <td>${v.Title||'-'}</td>
       <td>${v.PurchaseCategory||'-'}</td>
-      <td>${(v.SubmittedDate||'').slice(0,10)||'-'}</td>
+      <td style="font-size:11px;color:#605e5c">${_glCcSummary(v)}</td>
       <td style="text-align:right">${Math.round(v.TotalKRW||0).toLocaleString()}</td>
-      <td>${v.CurrentStep||0}/${v.TotalSteps||0}</td>
       <td><span class="badge-${(v.Status||'').replace(/[()]/g,'')}">${v.Status||'-'}</span></td>
+      <td style="font-size:11px;color:#605e5c;white-space:nowrap">${_appliedDateTime(v)}</td>
       <td style="text-align:center;vertical-align:middle" onclick="event.stopPropagation()">${_wdBtnList(v._spId, v.Status)}</td>
     </tr>`).join('');
 }
@@ -1677,8 +1696,8 @@ async function checkApprovalBadge(){
 }
 async function loadApprovalQueue(){
   const tbody = document.getElementById('appr-body');
-  if(!siteId){ tbody.innerHTML='<tr><td colspan="8" class="list-empty">SharePoint 사이트 접근 권한이 없습니다.</td></tr>'; return; }
-  tbody.innerHTML = '<tr><td colspan="8" class="list-empty">불러오는 중...</td></tr>';
+  if(!siteId){ tbody.innerHTML='<tr><td colspan="9" class="list-empty">SharePoint 사이트 접근 권한이 없습니다.</td></tr>'; return; }
+  tbody.innerHTML = '<tr><td colspan="9" class="list-empty">불러오는 중...</td></tr>';
   try {
     const [apprData, reqData] = await Promise.all([
       getAllApprovalsCached(),
@@ -1700,16 +1719,17 @@ async function loadApprovalQueue(){
     renderApprovalQueue();
     const badge = document.getElementById('appr-badge');
     if(badge){ badge.textContent = apprQueueCache.length; badge.style.display = apprQueueCache.length ? 'inline-block' : 'none'; }
-  } catch(e){ tbody.innerHTML='<tr><td colspan="8" class="list-empty">'+e.message+'</td></tr>'; }
+  } catch(e){ tbody.innerHTML='<tr><td colspan="9" class="list-empty">'+e.message+'</td></tr>'; }
 }
 function renderApprovalQueue(){
   const tbody = document.getElementById('appr-body');
-  if(!apprQueueCache.length){ tbody.innerHTML='<tr><td colspan="8" class="list-empty">결재할 항목이 없습니다.</td></tr>'; return; }
+  if(!apprQueueCache.length){ tbody.innerHTML='<tr><td colspan="9" class="list-empty">결재할 항목이 없습니다.</td></tr>'; return; }
   tbody.innerHTML = apprQueueCache.map((a,idx)=>`
     <tr onclick="openDetail('${a.RequestID}','appr')">
       <td style="text-align:center;color:#0078d4;font-weight:600">${idx+1}</td>
       <td>${a._req.Title||'-'}</td>
       <td>${a._req.PurchaseCategory||'-'}</td>
+      <td style="font-size:11px;color:#605e5c">${_glCcSummary(a._req)}</td>
       <td>${a._req.RequesterName||'-'}</td>
       <td style="text-align:right">${Math.round(a._req.TotalKRW||0).toLocaleString()}</td>
       <td>${a.ApprovalOrder}차 (${a.ApproverRole})</td>
@@ -1899,13 +1919,13 @@ function closeDetailModal(){ document.getElementById('detail-modal').classList.r
 // ── 관리자 ──
 async function loadAdminList(){
   const tbody = document.getElementById('admin-body');
-  if(!siteId){ tbody.innerHTML='<tr><td colspan="7" class="list-empty">SharePoint 사이트 접근 권한이 없습니다.</td></tr>'; return; }
-  tbody.innerHTML = '<tr><td colspan="7" class="list-empty">불러오는 중...</td></tr>';
+  if(!siteId){ tbody.innerHTML='<tr><td colspan="8" class="list-empty">SharePoint 사이트 접근 권한이 없습니다.</td></tr>'; return; }
+  tbody.innerHTML = '<tr><td colspan="8" class="list-empty">불러오는 중...</td></tr>';
   try {
     const data = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items?$expand=fields&$top=999`);
     adminListCache = data.value.map(it=>({...it.fields,_spId:it.id})).sort((a,b)=>b._spId-a._spId);
     renderAdminList();
-  } catch(e){ tbody.innerHTML='<tr><td colspan="7" class="list-empty">'+e.message+'</td></tr>'; }
+  } catch(e){ tbody.innerHTML='<tr><td colspan="8" class="list-empty">'+e.message+'</td></tr>'; }
 }
 function renderAdminList(){
   const st = document.getElementById('admin-f-status').value;
@@ -1914,16 +1934,17 @@ function renderAdminList(){
   if(st) list = list.filter(v=>v.Status===st);
   if(kw) list = list.filter(v=>(v.Title||'').toLowerCase().includes(kw)||(v.RequesterName||'').toLowerCase().includes(kw)||(v.PurchaseCategory||'').toLowerCase().includes(kw));
   const tbody = document.getElementById('admin-body');
-  if(!list.length){ tbody.innerHTML='<tr><td colspan="7" class="list-empty">데이터가 없습니다.</td></tr>'; return; }
+  if(!list.length){ tbody.innerHTML='<tr><td colspan="8" class="list-empty">데이터가 없습니다.</td></tr>'; return; }
   tbody.innerHTML = list.map((v,idx)=>`
     <tr onclick="openDetail('${v._spId}','admin')">
       <td style="text-align:center;color:#0078d4;font-weight:600">${idx+1}</td>
       <td>${v.Title||'-'}</td>
       <td>${v.RequesterName||'-'}</td>
       <td>${v.PurchaseCategory||'-'}</td>
-      <td>${(v.SubmittedDate||'').slice(0,10)||'-'}</td>
+      <td style="font-size:11px;color:#605e5c">${_glCcSummary(v)}</td>
       <td style="text-align:right">${Math.round(v.TotalKRW||0).toLocaleString()}</td>
       <td><span class="badge-${(v.Status||'').replace(/[()]/g,'')}">${v.Status||'-'}</span></td>
+      <td style="font-size:11px;color:#605e5c;white-space:nowrap">${_appliedDateTime(v)}</td>
     </tr>`).join('');
 }
 async function exportAdminExcel(){
@@ -2159,7 +2180,7 @@ async function exportDetailPdf(){
   try { goods = JSON.parse(v.GoodsJSON||'[]'); } catch(e){}
   try { accL = JSON.parse(v.AccountLinesJSON||'[]'); } catch(e){}
   const apprList = window._currentApprList||[];
-  const btn = document.querySelector('.modal-title button[onclick="exportDetailPdf()"]');
+  const btn = document.getElementById('btn-export-pdf');
   const btnOrig = btn ? btn.innerHTML : null;
   loading(true, 'PDF 생성 중...');
   try {
@@ -2176,7 +2197,29 @@ async function exportDetailPdf(){
     // 첨부파일(견적서 등) 실제 내용을 뒤에 페이지로 병합 — 상세 모달(detail-body)에 있는 첨부파일 링크를 기준으로 함
     const detailEl = document.getElementById('detail-body');
     if(detailEl){ if(btn) btn.innerHTML='⏳ 첨부파일 병합 중...'; await appendAttachmentPagesToDoc(mainDoc, dataUrlToUint8, makeHeaderBytes, detailEl, btn); }
-    await downloadPdfDoc(mainDoc, (v.Title||'CTR_PR')+'.pdf');
+    await downloadPdfDoc(mainDoc, (v.Title||'CTR_PR')+'_공식양식.pdf');
+  } catch(e){ showAlert('PDF 생성 실패', e.message, '⚠️'); }
+  finally { loading(false); if(btn) btn.innerHTML = btnOrig; }
+}
+
+// ── 상세 화면(화면 그대로) PDF 출력 — ACC Voucher와 동일 패턴: detail-body를 그대로 캡처 ──
+async function exportDetailScreenPdf(){
+  const v = window._currentDetail; if(!v) return;
+  const btn = document.getElementById('btn-export-detail-pdf');
+  const btnOrig = btn ? btn.innerHTML : null;
+  loading(true, 'PDF 생성 중...');
+  try {
+    const detailEl = document.getElementById('detail-body');
+    if(!detailEl) throw new Error('상세 내용을 찾을 수 없습니다.');
+    const canvas = await html2canvas(detailEl, {scale:2, useCORS:true, allowTaint:true, backgroundColor:'#fff', scrollY:0, windowWidth:700});
+
+    const { mainDoc, dataUrlToUint8, makeHeaderBytes } = await buildPdfDocFromSegments([
+      {cvs:canvas, headerText:'STK Purchase Requisition · 신청 상세 화면', orientation:'portrait'}
+    ]);
+    // 첨부파일(견적서 등) 실제 내용을 뒤에 페이지로 병합 (공식 양식 PDF와 동일 방식)
+    if(btn) btn.innerHTML='⏳ 첨부파일 병합 중...';
+    await appendAttachmentPagesToDoc(mainDoc, dataUrlToUint8, makeHeaderBytes, detailEl, btn);
+    await downloadPdfDoc(mainDoc, (v.Title||'CTR_PR')+'_상세화면.pdf');
   } catch(e){ showAlert('PDF 생성 실패', e.message, '⚠️'); }
   finally { loading(false); if(btn) btn.innerHTML = btnOrig; }
 }
