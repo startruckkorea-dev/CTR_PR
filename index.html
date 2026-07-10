@@ -275,7 +275,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
         </div>
         <div class="form-group">
           <label>Total Amount (Excl. VAT)</label>
-          <input type="text" id="v-goods-total" readonly style="text-align:right;font-weight:700;color:#0078d4">
+          <input type="text" id="v-goods-total" readonly style="text-align:right;font-weight:400;font-size:11px;color:#a19f9d">
           <div id="v-goods-total-note" style="font-size:10px;color:#a19f9d;margin-top:2px"></div>
         </div>
       </div>
@@ -1164,16 +1164,16 @@ function checkGoodsAccMatch(){
   const cur = getSelectedCurrency();
   if(!goodsTotal || !accIncl){
     if(banner) banner.innerHTML = '<span style="color:#a19f9d">2번, 4번 항목의 Excl. VAT 금액이 동일한 경우 입력됩니다</span>';
-    if(totalField) totalField.value = '2번, 4번 항목의 Excl. VAT 금액이 동일한 경우 입력됩니다';
+    if(totalField){ totalField.value = '2번, 4번 항목의 Excl. VAT 금액이 동일한 경우 입력됩니다'; totalField.style.cssText='text-align:right;font-weight:400;font-size:11px;color:#a19f9d'; }
     return;
   }
   const match = Math.abs(goodsTotal-accIncl) < 1;
   if(match){
     if(banner) banner.innerHTML = '<span style="color:#107c10;font-weight:600">✓ Description of Goods 합계와 일치합니다</span>';
-    if(totalField) totalField.value = accExcl.toLocaleString()+(cur!=='KRW'?(' '+cur):'');
+    if(totalField){ totalField.value = accExcl.toLocaleString()+(cur!=='KRW'?(' '+cur):''); totalField.style.cssText='text-align:right;font-weight:700;font-size:13px;color:#0078d4'; }
   } else {
     if(banner) banner.innerHTML = '<span style="color:#a4262c;font-weight:600">✗ Description of Goods 합계와 일치하지 않습니다 (차이: '+Math.round(goodsTotal-accIncl).toLocaleString()+' '+cur+')</span>';
-    if(totalField) totalField.value = '금액 불일치 — 2번과 4번의 합계를 맞춰주세요';
+    if(totalField){ totalField.value = '금액 불일치 — 2번과 4번의 합계를 맞춰주세요'; totalField.style.cssText='text-align:right;font-weight:500;font-size:11px;color:#a4262c'; }
   }
 }
 function fmtInput(el){ const raw=el.value.replace(/,/g,'').replace(/[^0-9.]/g,''); el.value = raw?Number(raw).toLocaleString():''; }
