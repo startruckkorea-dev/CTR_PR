@@ -349,8 +349,8 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
       <div class="section-title">4. Accounting Information</div>
       <div class="form-row compact" style="margin-bottom:6px">
         <div class="form-group">
-          <label>Currency</label>
-          <select id="v-currency" onchange="onCurrencyChange('acc')">
+          <label>Currency <span class="auto-tag">자동</span></label>
+          <select id="v-currency" disabled>
             <option value="KRW">KRW</option>
             <option value="EUR">EUR</option>
             <option value="USD">USD</option>
@@ -358,10 +358,12 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
             <option value="JPY">JPY</option>
             <option value="CNY">CNY</option>
           </select>
+          <span style="font-size:10px;color:#a19f9d">2번 Description of Goods 항목의 통화를 따라갑니다</span>
         </div>
         <div class="form-group" id="v-exrate-group" style="display:none">
           <label>Exchange Rate <span class="auto-tag">자동</span></label>
-          <input type="number" id="v-exrate" placeholder="환율" step="0.0001" readonly title="2. Description of Goods에서 지정한 환율이 그대로 적용됩니다">
+          <input type="number" id="v-exrate" placeholder="환율" step="0.0001" readonly>
+          <span style="font-size:10px;color:#a19f9d">2번 항목의 환율을 따라갑니다</span>
         </div>
       </div>
       <div id="ex-rate-banner-acc"></div>
@@ -1166,8 +1168,8 @@ function checkGoodsAccMatch(){
   const totalField = document.getElementById('v-goods-total');
   const cur = getSelectedCurrency();
   if(!goodsTotal || !accIncl){
-    if(banner) banner.innerHTML = '<span style="color:#a19f9d">2. Description of Goods와 4. Accounting Information에 금액을 모두 입력하면 일치 여부가 표시됩니다.</span>';
-    if(totalField) totalField.value = '2, 4번 항목 금액 입력 후 확인됩니다';
+    if(banner) banner.innerHTML = '<span style="color:#a19f9d">2번, 4번 항목의 Excl. VAT 금액이 동일한 경우 입력됩니다</span>';
+    if(totalField) totalField.value = '2번, 4번 항목의 Excl. VAT 금액이 동일한 경우 입력됩니다';
     return;
   }
   const match = Math.abs(goodsTotal-accIncl) < 1;
