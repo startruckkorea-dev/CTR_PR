@@ -313,6 +313,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
             <th>Description of Goods</th>
             <th style="width:80px;text-align:center">Quantity</th>
             <th style="width:150px">Unit Price</th>
+            <th style="width:150px">Sub Total</th>
             <th style="width:34px"></th>
           </tr></thead>
           <tbody id="goods-tbody"></tbody>
@@ -365,7 +366,10 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
           <input type="number" id="v-exrate" placeholder="환율" step="0.0001" readonly>
         </div>
       </div>
-      <div style="font-size:11px;color:#a19f9d;margin-bottom:10px">2번 Description of Goods 항목의 통화·환율을 따라갑니다</div>
+      <div style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#486991;background:#f0f6ff;border-radius:4px;padding:5px 10px;margin-bottom:10px">
+        <span style="font-size:12px;line-height:1">🔗</span>
+        <span>2번 Description of Goods 항목의 통화·환율 설정과 동일 적용 됩니다.</span>
+      </div>
       <div id="ex-rate-banner-acc"></div>
       <div class="lines-header">
         <span style="font-size:12px;color:#605e5c">G/L Account · Cost Center · 금액을 입력하세요 (VAT 라인은 자동 추가)</span>
@@ -999,11 +1003,17 @@ function renderGoodsLines(){
   tb.innerHTML = goodsLines.map((l,i)=>`
     <tr>
       <td><input type="text" value="${escAttr(l.desc)}" placeholder="품목명을 입력하세요" oninput="goodsLines[${i}].desc=this.value"></td>
-      <td><input type="text" value="${l.qty}" style="text-align:center" oninput="goodsLines[${i}].qty=this.value;calcGoodsTotal()"></td>
-      <td><input type="text" value="${l.amount?Number(l.amount).toLocaleString():''}" placeholder="0" style="text-align:right" oninput="fmtInput(this);goodsLines[${i}].amount=parseComma(this.value);calcGoodsTotal()"></td>
+      <td><input type="text" value="${l.qty}" style="text-align:center" oninput="goodsLines[${i}].qty=this.value;updateGoodsSubtotal(${i});calcGoodsTotal()"></td>
+      <td><input type="text" value="${l.amount?Number(l.amount).toLocaleString():''}" placeholder="0" style="text-align:right" oninput="fmtInput(this);goodsLines[${i}].amount=parseComma(this.value);updateGoodsSubtotal(${i});calcGoodsTotal()"></td>
+      <td id="goods-subtotal-${i}" style="text-align:right;color:#605e5c;font-size:.82rem">${_goodsLineSubtotal(l).toLocaleString()}</td>
       <td><button class="btn-del" onclick="deleteGoodsLine(${i})">✕</button></td>
     </tr>`).join('');
   calcGoodsTotal();
+}
+function _goodsLineSubtotal(l){ return (parseFloat(l.amount)||0)*(parseFloat(l.qty)||1); }
+function updateGoodsSubtotal(i){
+  const cell = document.getElementById('goods-subtotal-'+i);
+  if(cell) cell.textContent = _goodsLineSubtotal(goodsLines[i]).toLocaleString();
 }
 // ── 통화/환율 (ACC Voucher와 동일 파일 acc_voucher_exchange.xlsx 재사용) ──
 function getSelectedCurrency(){ return (document.getElementById('v-currency')||{value:'KRW'}).value || 'KRW'; }
