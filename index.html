@@ -443,10 +443,12 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
         </select>
         <input type="text" id="f-search" placeholder="PR ID, 품목 검색..." oninput="renderList()">
       </div>
+      <div class="list-table-scroll">
       <table class="list-table">
-        <thead><tr><th style="width:44px;text-align:center">No</th><th>PR ID</th><th>Category</th><th>G/L Acc.No. / Cost Center</th><th style="text-align:right">금액(KRW)</th><th>상태</th><th>신청일</th><th style="width:90px;text-align:center">Withdraw</th></tr></thead>
-        <tbody id="list-body"><tr><td colspan="8" class="list-empty">불러오는 중...</td></tr></tbody>
+        <thead><tr><th style="width:44px;text-align:center">번호</th><th>Title</th><th>Purchase Category</th><th>G/L Acc.No.</th><th>Cost Center</th><th style="text-align:right">Total Amount (Excl. VAT)</th><th style="text-align:right">VAT (If exists.)</th><th>상태</th><th>신청일</th><th style="width:90px;text-align:center">Withdraw</th></tr></thead>
+        <tbody id="list-body"><tr><td colspan="10" class="list-empty">불러오는 중...</td></tr></tbody>
       </table>
+      </div>
     </div>
   </div>
 
@@ -456,8 +458,8 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
       <div class="card-title">결재함</div>
       <div class="list-table-scroll">
       <table class="list-table">
-        <thead><tr><th style="width:44px;text-align:center">번호</th><th>Title</th><th>Purchase Category</th><th>G/L Acc.No.</th><th>G/L Acc. Description</th><th>Cost Center</th><th>신청자</th><th style="text-align:right">Total Amount (Excl. VAT)</th><th style="text-align:right">VAT (If exists.)</th><th>상태</th><th>신청일</th><th style="width:120px;text-align:center">처리</th></tr></thead>
-        <tbody id="appr-body"><tr><td colspan="12" class="list-empty">불러오는 중...</td></tr></tbody>
+        <thead><tr><th style="width:44px;text-align:center">번호</th><th>Title</th><th>Purchase Category</th><th>G/L Acc.No.</th><th>Cost Center</th><th>신청자</th><th style="text-align:right">Total Amount (Excl. VAT)</th><th style="text-align:right">VAT (If exists.)</th><th>상태</th><th>신청일</th><th style="width:120px;text-align:center">처리</th></tr></thead>
+        <tbody id="appr-body"><tr><td colspan="11" class="list-empty">불러오는 중...</td></tr></tbody>
       </table>
       </div>
     </div>
@@ -482,8 +484,8 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
       </div>
       <div class="list-table-scroll">
       <table class="list-table">
-        <thead><tr><th style="width:44px;text-align:center">번호</th><th>Title</th><th>Purchase Category</th><th>G/L Acc.No.</th><th>G/L Acc. Description</th><th>Cost Center</th><th>신청자</th><th style="text-align:right">Total Amount (Excl. VAT)</th><th style="text-align:right">VAT (If exists.)</th><th>상태</th><th>신청일</th><th style="width:90px;text-align:center">처리</th></tr></thead>
-        <tbody id="admin-body"><tr><td colspan="12" class="list-empty">불러오는 중...</td></tr></tbody>
+        <thead><tr><th style="width:44px;text-align:center">번호</th><th>Title</th><th>Purchase Category</th><th>G/L Acc.No.</th><th>Cost Center</th><th>신청자</th><th style="text-align:right">Total Amount (Excl. VAT)</th><th style="text-align:right">VAT (If exists.)</th><th>상태</th><th>신청일</th><th style="width:90px;text-align:center">처리</th></tr></thead>
+        <tbody id="admin-body"><tr><td colspan="11" class="list-empty">불러오는 중...</td></tr></tbody>
       </table>
       </div>
     </div>
@@ -1634,8 +1636,8 @@ function switchTab(tab){
 // ── 내 신청서 목록 ──
 async function loadMyList(){
   const tbody = document.getElementById('list-body');
-  if(!siteId){ tbody.innerHTML='<tr><td colspan="8" class="list-empty">SharePoint 사이트 접근 권한이 없습니다. IT 담당자에게 문의하세요.</td></tr>'; return; }
-  tbody.innerHTML = '<tr><td colspan="8" class="list-empty">불러오는 중...</td></tr>';
+  if(!siteId){ tbody.innerHTML='<tr><td colspan="10" class="list-empty">SharePoint 사이트 접근 권한이 없습니다. IT 담당자에게 문의하세요.</td></tr>'; return; }
+  tbody.innerHTML = '<tr><td colspan="10" class="list-empty">불러오는 중...</td></tr>';
   try {
     const data = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items?$expand=fields&$top=999`);
     myListCache = data.value
@@ -1643,7 +1645,7 @@ async function loadMyList(){
       .map(it=>({...it.fields, _spId:it.id}))
       .sort((a,b)=>b._spId-a._spId);
     renderList();
-  } catch(e){ tbody.innerHTML='<tr><td colspan="8" class="list-empty">'+e.message+'</td></tr>'; }
+  } catch(e){ tbody.innerHTML='<tr><td colspan="10" class="list-empty">'+e.message+'</td></tr>'; }
 }
 function _wdBtnList(spId, status){
   if(status!=='대기') return '';
@@ -1692,18 +1694,24 @@ function renderList(){
   if(st) list = list.filter(v=>v.Status===st);
   if(kw) list = list.filter(v=>(v.Title||'').toLowerCase().includes(kw)||(v.PurchaseCategory||'').toLowerCase().includes(kw));
   const tbody = document.getElementById('list-body');
-  if(!list.length){ tbody.innerHTML='<tr><td colspan="8" class="list-empty">신청 내역이 없습니다.</td></tr>'; return; }
-  tbody.innerHTML = list.map((v,idx)=>`
+  if(!list.length){ tbody.innerHTML='<tr><td colspan="10" class="list-empty">신청 내역이 없습니다.</td></tr>'; return; }
+  tbody.innerHTML = list.map((v,idx)=>{
+    const p = _glCcParts(v);
+    const b = _amountBreakdown(v);
+    return `
     <tr onclick="openDetail('${v._spId}','list')">
       <td style="text-align:center;color:#0078d4;font-weight:600">${idx+1}</td>
       <td>${v.Title||'-'}</td>
       <td>${v.PurchaseCategory||'-'}</td>
-      <td style="font-size:11px;color:#605e5c">${_glCcSummary(v)}</td>
-      <td style="text-align:right">${Math.round(v.TotalKRW||0).toLocaleString()}</td>
+      <td style="font-size:11px;color:#605e5c">${p.gl}${p.extra>0?' 외 '+p.extra+'건':''}</td>
+      <td style="font-size:11px;color:#605e5c">${p.cctr}</td>
+      <td style="text-align:right">${b.exclKRW.toLocaleString()}</td>
+      <td style="text-align:right">${b.vatKRW>0?b.vatKRW.toLocaleString():'-'}</td>
       <td><span class="badge-${(v.Status||'').replace(/[()]/g,'')}">${v.Status||'-'}</span></td>
       <td style="font-size:11px;color:#605e5c;white-space:nowrap">${_appliedDateTime(v)}</td>
       <td style="text-align:center;vertical-align:middle" onclick="event.stopPropagation()">${_wdBtnList(v._spId, v.Status)}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 // ── 결재함 ──
@@ -1719,8 +1727,8 @@ async function checkApprovalBadge(){
 }
 async function loadApprovalQueue(){
   const tbody = document.getElementById('appr-body');
-  if(!siteId){ tbody.innerHTML='<tr><td colspan="12" class="list-empty">SharePoint 사이트 접근 권한이 없습니다.</td></tr>'; return; }
-  tbody.innerHTML = '<tr><td colspan="12" class="list-empty">불러오는 중...</td></tr>';
+  if(!siteId){ tbody.innerHTML='<tr><td colspan="11" class="list-empty">SharePoint 사이트 접근 권한이 없습니다.</td></tr>'; return; }
+  tbody.innerHTML = '<tr><td colspan="11" class="list-empty">불러오는 중...</td></tr>';
   try {
     const [apprData, reqData] = await Promise.all([
       getAllApprovalsCached(),
@@ -1742,11 +1750,11 @@ async function loadApprovalQueue(){
     renderApprovalQueue();
     const badge = document.getElementById('appr-badge');
     if(badge){ badge.textContent = apprQueueCache.length; badge.style.display = apprQueueCache.length ? 'inline-block' : 'none'; }
-  } catch(e){ tbody.innerHTML='<tr><td colspan="12" class="list-empty">'+e.message+'</td></tr>'; }
+  } catch(e){ tbody.innerHTML='<tr><td colspan="11" class="list-empty">'+e.message+'</td></tr>'; }
 }
 function renderApprovalQueue(){
   const tbody = document.getElementById('appr-body');
-  if(!apprQueueCache.length){ tbody.innerHTML='<tr><td colspan="12" class="list-empty">결재할 항목이 없습니다.</td></tr>'; return; }
+  if(!apprQueueCache.length){ tbody.innerHTML='<tr><td colspan="11" class="list-empty">결재할 항목이 없습니다.</td></tr>'; return; }
   tbody.innerHTML = apprQueueCache.map((a,idx)=>{
     const p = _glCcParts(a._req);
     const b = _amountBreakdown(a._req);
@@ -1756,9 +1764,8 @@ function renderApprovalQueue(){
       <td>${a._req.Title||'-'}</td>
       <td>${a._req.PurchaseCategory||'-'}</td>
       <td style="font-size:11px;color:#605e5c">${p.gl}${p.extra>0?' 외 '+p.extra+'건':''}</td>
-      <td style="font-size:11px;color:#605e5c">${p.glName}</td>
       <td style="font-size:11px;color:#605e5c">${p.cctr}</td>
-      <td>${a._req.RequesterName||'-'}</td>
+      <td style="font-size:12px">${a._req.RequesterEmail||'-'}</td>
       <td style="text-align:right">${b.exclKRW.toLocaleString()}</td>
       <td style="text-align:right">${b.vatKRW>0?b.vatKRW.toLocaleString():'-'}</td>
       <td><span class="badge-${(a.Status||'').replace(/[()]/g,'')}">${a.Status||'-'}</span></td>
@@ -1949,22 +1956,22 @@ function closeDetailModal(){ document.getElementById('detail-modal').classList.r
 // ── 관리자 ──
 async function loadAdminList(){
   const tbody = document.getElementById('admin-body');
-  if(!siteId){ tbody.innerHTML='<tr><td colspan="12" class="list-empty">SharePoint 사이트 접근 권한이 없습니다.</td></tr>'; return; }
-  tbody.innerHTML = '<tr><td colspan="12" class="list-empty">불러오는 중...</td></tr>';
+  if(!siteId){ tbody.innerHTML='<tr><td colspan="11" class="list-empty">SharePoint 사이트 접근 권한이 없습니다.</td></tr>'; return; }
+  tbody.innerHTML = '<tr><td colspan="11" class="list-empty">불러오는 중...</td></tr>';
   try {
     const data = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items?$expand=fields&$top=999`);
     adminListCache = data.value.map(it=>({...it.fields,_spId:it.id})).sort((a,b)=>b._spId-a._spId);
     renderAdminList();
-  } catch(e){ tbody.innerHTML='<tr><td colspan="12" class="list-empty">'+e.message+'</td></tr>'; }
+  } catch(e){ tbody.innerHTML='<tr><td colspan="11" class="list-empty">'+e.message+'</td></tr>'; }
 }
 function renderAdminList(){
   const st = document.getElementById('admin-f-status').value;
   const kw = (document.getElementById('admin-f-search').value||'').toLowerCase();
   let list = adminListCache;
   if(st) list = list.filter(v=>v.Status===st);
-  if(kw) list = list.filter(v=>(v.Title||'').toLowerCase().includes(kw)||(v.RequesterName||'').toLowerCase().includes(kw)||(v.PurchaseCategory||'').toLowerCase().includes(kw));
+  if(kw) list = list.filter(v=>(v.Title||'').toLowerCase().includes(kw)||(v.RequesterName||'').toLowerCase().includes(kw)||(v.RequesterEmail||'').toLowerCase().includes(kw)||(v.PurchaseCategory||'').toLowerCase().includes(kw));
   const tbody = document.getElementById('admin-body');
-  if(!list.length){ tbody.innerHTML='<tr><td colspan="12" class="list-empty">데이터가 없습니다.</td></tr>'; return; }
+  if(!list.length){ tbody.innerHTML='<tr><td colspan="11" class="list-empty">데이터가 없습니다.</td></tr>'; return; }
   tbody.innerHTML = list.map((v,idx)=>{
     const p = _glCcParts(v);
     const b = _amountBreakdown(v);
@@ -1974,9 +1981,8 @@ function renderAdminList(){
       <td>${v.Title||'-'}</td>
       <td>${v.PurchaseCategory||'-'}</td>
       <td style="font-size:11px;color:#605e5c">${p.gl}${p.extra>0?' 외 '+p.extra+'건':''}</td>
-      <td style="font-size:11px;color:#605e5c">${p.glName}</td>
       <td style="font-size:11px;color:#605e5c">${p.cctr}</td>
-      <td>${v.RequesterName||'-'}</td>
+      <td style="font-size:12px">${v.RequesterEmail||'-'}</td>
       <td style="text-align:right">${b.exclKRW.toLocaleString()}</td>
       <td style="text-align:right">${b.vatKRW>0?b.vatKRW.toLocaleString():'-'}</td>
       <td><span class="badge-${(v.Status||'').replace(/[()]/g,'')}">${v.Status||'-'}</span></td>
