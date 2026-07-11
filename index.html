@@ -1142,7 +1142,12 @@ function calcGoodsTotal(){
 }
 
 // ── Accounting Information 라인 ──
-function addAccLine(){ accLines.push({itemDesc:'',gl:'',glName:'',cctr:'',cctrName:'',amount:0,isVat:false}); renderAccLines(); }
+function addAccLine(){
+  const newLine = {itemDesc:'',gl:'',glName:'',cctr:'',cctrName:'',amount:0,isVat:false};
+  const vatIdx = accLines.findIndex(l=>l.isVat);
+  if(vatIdx>=0) accLines.splice(vatIdx,0,newLine); else accLines.push(newLine);
+  renderAccLines();
+}
 function deleteAccLine(i){ accLines.splice(i,1); renderAccLines(); }
 function addVatLine(){
   const base = accLines.filter(l=>!l.isVat).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
