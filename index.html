@@ -1221,7 +1221,7 @@ function checkGoodsAccMatch(){
   }
   const match = Math.abs(goodsTotal-accIncl) < 1;
   if(match){
-    if(banner) banner.innerHTML = '<span style="color:#107c10;font-weight:600">✓ Description of Goods 합계와 일치합니다</span>';
+    if(banner) banner.innerHTML = '<span style="color:#107c10;font-weight:600">✓ 2. Description of Goods 합계와 일치합니다</span>';
     if(totalField){
       const rate = getSelectedExRate();
       const krwAmt = cur==='KRW' ? accExcl : Math.round(accExcl*rate);
@@ -1229,7 +1229,7 @@ function checkGoodsAccMatch(){
       totalField.style.cssText='text-align:right;font-weight:700;font-size:13px;color:#0078d4';
     }
   } else {
-    if(banner) banner.innerHTML = '<span style="color:#a4262c;font-weight:600">✗ Description of Goods 합계와 일치하지 않습니다 (차이: '+Math.round(goodsTotal-accIncl).toLocaleString()+' '+cur+')</span>';
+    if(banner) banner.innerHTML = '<span style="color:#a4262c;font-weight:600">✗ 2. Description of Goods 합계와 일치하지 않습니다 (차이: '+Math.round(goodsTotal-accIncl).toLocaleString()+' '+cur+')</span>';
     if(totalField){ totalField.value = '금액 불일치 — 2번과 4번의 합계를 맞춰주세요'; totalField.style.cssText='text-align:right;font-weight:500;font-size:11px;color:#a4262c'; }
   }
 }
