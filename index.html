@@ -1974,8 +1974,8 @@ async function openDetail(spId, fromTab){
       ];
       return options.map(o=>{
         const isChecked = checked.includes(o.key);
-        return `<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;font-size:.82rem">
-          <span style="color:${isChecked?'#107c10':'#c8c6c4'};font-size:1rem;line-height:1.2;flex-shrink:0">${isChecked?'☑':'☐'}</span>
+        return `<div style="display:flex;align-items:flex-start;gap:8px;padding:2px 0;font-size:.82rem">
+          <span style="color:${isChecked?'#107c10':'#c8c6c4'};font-size:1rem;line-height:1.3;flex-shrink:0">${isChecked?'☑':'☐'}</span>
           <span style="color:${isChecked?'#323130':'#a19f9d'}">${o.label}</span>
         </div>`;
       }).join('');
