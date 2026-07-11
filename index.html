@@ -145,6 +145,10 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
 .det-row:last-child{border-bottom:none}
 .det-lbl{color:#605e5c;width:160px;flex-shrink:0}
 .det-val{color:#323130;font-weight:500;flex:1}
+.det-table{width:100%;border-collapse:collapse;font-size:.75rem;margin-bottom:10px}
+.det-table th{background:#f3f2f1;padding:6px 8px;text-align:left;border:1px solid #edebe9;font-weight:600;color:#605e5c;font-size:.68rem;white-space:nowrap}
+.det-table td{padding:6px 8px;border:1px solid #edebe9;color:#323130;vertical-align:top}
+.det-table tfoot td{background:#f9f8f7;font-weight:700}
 .appr-item{display:flex;justify-content:space-between;align-items:flex-start;padding:9px 10px;border-bottom:1px solid #edebe9;font-size:.8rem;gap:10px}
 .appr-item:last-child{border-bottom:none}
 .status-대기{color:#7d5700;font-weight:600}
@@ -1910,7 +1914,7 @@ async function openDetail(spId, fromTab){
     <div class="det-sec">기본 정보</div>
     <div class="det-row"><div class="det-lbl">PR ID</div><div class="det-val"><span style="font-weight:700">${v.Title||'-'}</span></div></div>
     <div class="det-row"><div class="det-lbl">Purchase Category</div><div class="det-val">${v.PurchaseCategory||'-'}</div></div>
-    <div class="det-row"><div class="det-lbl">Requester</div><div class="det-val">${v.RequesterName||'-'} (${v.RequesterEmail||'-'})</div></div>
+    <div class="det-row"><div class="det-lbl">Requester</div><div class="det-val">${v.RequesterEmail||'-'}</div></div>
     <div class="det-row"><div class="det-lbl">Department / Cost Center</div><div class="det-val">${v.Department||'-'} / ${v.CostCenter||'-'}</div></div>
     <div class="det-row"><div class="det-lbl">제출일</div><div class="det-val">${(v.SubmittedDate||'').slice(0,10)||'-'}</div></div>
     ${(v.Currency && v.Currency!=='KRW') ? `<div class="det-row"><div class="det-lbl">Currency / Exchange Rate</div><div class="det-val">${v.Currency} / ${v.ExchangeRate||'-'}</div></div>` : ''}
@@ -1920,29 +1924,43 @@ async function openDetail(spId, fromTab){
     ${(()=>{
       const cur = v.Currency||'KRW';
       const rate = (cur!=='KRW' && v.ExchangeRate) ? parseFloat(v.ExchangeRate) : 1;
+      const origTotal = goods.reduce((s,g)=>s+(g.amount||0)*(g.qty||1),0);
       if(!goods.length) return '<div class="det-row"><div class="det-val">없음</div></div>';
-      return goods.map(g=>{
+      const rows = goods.map(g=>{
         const sub = Math.round((g.amount||0)*(g.qty||1));
-        const krwNote = cur!=='KRW' ? ` <span style="color:#a19f9d;font-weight:400">(≈ ${Math.round(sub*rate).toLocaleString()} KRW)</span>` : '';
-        return `<div class="det-row"><div class="det-lbl">${g.desc||'-'}</div><div class="det-val">단가 ${Math.round(g.amount||0).toLocaleString()} × 수량 ${g.qty||1} = <b>${sub.toLocaleString()} ${cur}</b>${krwNote}</div></div>`;
+        const krwNote = cur!=='KRW' ? `<br><span style="color:#a19f9d;font-size:.68rem">(≈ ${Math.round(sub*rate).toLocaleString()} KRW)</span>` : '';
+        return `<tr><td>${g.desc||'-'}</td><td style="text-align:center">${g.qty||1}</td><td style="text-align:right">${Math.round(g.amount||0).toLocaleString()}</td><td style="text-align:right">${sub.toLocaleString()} ${cur}${krwNote}</td></tr>`;
       }).join('');
+      const totalKrwNote = cur!=='KRW' ? ` <span style="font-weight:400;color:#605e5c">(＝ ${Math.round(v.TotalAmount||0).toLocaleString()} KRW)</span>` : '';
+      return `<div style="overflow-x:auto"><table class="det-table">
+        <thead><tr><th>Description of Goods</th><th style="text-align:center">Quantity</th><th style="text-align:right">Unit Price</th><th style="text-align:right">Sub Total (Excl. VAT)</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr><td colspan="3" style="text-align:right">TOTAL</td><td style="text-align:right">${origTotal.toLocaleString()} ${cur}${totalKrwNote}</td></tr></tfoot>
+      </table></div>`;
     })()}
-    <div class="det-row"><div class="det-lbl"><b>TOTAL AMOUNT</b></div><div class="det-val"><b>${Math.round(v.TotalAmount||0).toLocaleString()} KRW</b>${(v.Currency&&v.Currency!=='KRW')?` <span style="color:#605e5c;font-weight:400">(＝ ${goods.reduce((s,g)=>s+(g.amount||0)*(g.qty||1),0).toLocaleString()} ${v.Currency})</span>`:''}</div></div>
 
     <div class="det-sec">Accounting Information</div>
     ${(()=>{
       const cur = v.Currency||'KRW';
       const rate = (cur!=='KRW' && v.ExchangeRate) ? parseFloat(v.ExchangeRate) : 1;
       if(!accL.length) return '<div class="det-row"><div class="det-val">없음</div></div>';
-      return accL.map(l=>{
+      let totalKrw = 0;
+      const rows = accL.map(l=>{
         const amt = Math.round(l.amount||0);
-        const krwNote = cur!=='KRW' ? ` <span style="color:#a19f9d;font-weight:400">(≈ ${Math.round(amt*rate).toLocaleString()} KRW)</span>` : '';
-        return `<div class="det-row"><div class="det-lbl">${l.glName||'-'} (${l.gl||'-'})</div><div class="det-val">${l.cctrName||l.cctr?((l.cctrName||l.cctr)+' · '):''}${amt.toLocaleString()} ${cur}${krwNote}</div></div>`;
+        const krwAmt = cur==='KRW' ? amt : Math.round(amt*rate);
+        totalKrw += krwAmt;
+        return `<tr${l.isVat?' style="background:#fce4d6"':''}><td>${l.itemDesc||'-'}</td><td>${l.glName||'-'}</td><td>${l.gl||'-'}</td><td>${l.cctrName||l.cctr||'-'}</td><td style="text-align:right">${krwAmt.toLocaleString()}</td></tr>`;
       }).join('');
+      return `<div style="overflow-x:auto"><table class="det-table">
+        <thead><tr><th>Item Description</th><th>G/L Acc. Description</th><th>G/L Acc. No.</th><th>Cost Center</th><th style="text-align:right">Amount (KRW)</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr><td colspan="4" style="text-align:right">TOTAL</td><td style="text-align:right">${totalKrw.toLocaleString()}</td></tr></tfoot>
+      </table></div>`;
     })()}
 
     <div class="det-sec">Remarks</div>
     <div class="det-row"><div class="det-val">${(v.Remarks||'').split(';').filter(Boolean).join(', ')||'-'}</div></div>
+    <div class="notice notice-warn" style="margin-top:8px">(Note) Please follow the "Government Related Payment/Expense Guideline", if the expenses are related to Government.</div>
 
     <div class="det-sec">첨부파일</div>
     <div style="padding:4px 0">${attHtml}</div>
