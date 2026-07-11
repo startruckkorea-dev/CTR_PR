@@ -1964,7 +1964,22 @@ async function openDetail(spId, fromTab){
     })()}
 
     <div class="det-sec">Remarks</div>
-    <div class="det-row"><div class="det-val">${(v.Remarks||'').split(';').filter(Boolean).join(', ')||'-'}</div></div>
+    ${(()=>{
+      const checked = (v.Remarks||'').split(';').filter(Boolean);
+      const options = [
+        {key:'Onetime payment', label:'Onetime payment'},
+        {key:'Partial payment', label:'Partial payment (For partial payment, please attach the "installment table")'},
+        {key:'PO Required', label:'PO Required'},
+        {key:'GR Required', label:'GR Required'}
+      ];
+      return options.map(o=>{
+        const isChecked = checked.includes(o.key);
+        return `<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;font-size:.82rem">
+          <span style="color:${isChecked?'#107c10':'#c8c6c4'};font-size:1rem;line-height:1.2;flex-shrink:0">${isChecked?'☑':'☐'}</span>
+          <span style="color:${isChecked?'#323130':'#a19f9d'}">${o.label}</span>
+        </div>`;
+      }).join('');
+    })()}
     <div class="notice notice-warn" style="margin-top:8px">(Note) Please follow the "Government Related Payment/Expense Guideline", if the expenses are related to Government.</div>
 
     <div class="det-sec">첨부파일</div>
