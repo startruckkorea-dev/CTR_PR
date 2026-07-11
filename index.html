@@ -275,7 +275,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
           </select>
         </div>
         <div class="form-group">
-          <label>Total Amount (Excl. VAT)</label>
+          <label>Total Amount(KRW) (Excl. VAT)</label>
           <input type="text" id="v-goods-total" readonly style="text-align:right;font-weight:400;font-size:11px;color:#a19f9d">
           <div id="v-goods-total-note" style="font-size:10px;color:#a19f9d;margin-top:2px"></div>
         </div>
@@ -313,14 +313,14 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
             <th>Description of Goods</th>
             <th style="width:80px;text-align:center">Quantity</th>
             <th style="width:150px">Unit Price</th>
-            <th style="width:150px">Sub Total</th>
+            <th style="width:170px">Sub Total(KRW) (Excl. VAT)</th>
             <th style="width:34px"></th>
           </tr></thead>
           <tbody id="goods-tbody"></tbody>
         </table>
       </div>
       <div class="totals-bar">
-        <span class="total-label">TOTAL AMOUNT (Excl. VAT)</span>
+        <span class="total-label">TOTAL AMOUNT(KRW) (Excl. VAT)</span>
         <span class="total-main" id="goods-total-display">0</span>
       </div>
     </div>
@@ -1005,15 +1005,26 @@ function renderGoodsLines(){
       <td><input type="text" value="${escAttr(l.desc)}" placeholder="품목명을 입력하세요" oninput="goodsLines[${i}].desc=this.value"></td>
       <td><input type="text" value="${l.qty}" style="text-align:center" oninput="goodsLines[${i}].qty=this.value;updateGoodsSubtotal(${i});calcGoodsTotal()"></td>
       <td><input type="text" value="${l.amount?Number(l.amount).toLocaleString():''}" placeholder="0" style="text-align:right" oninput="fmtInput(this);goodsLines[${i}].amount=parseComma(this.value);updateGoodsSubtotal(${i});calcGoodsTotal()"></td>
-      <td id="goods-subtotal-${i}" style="text-align:right;color:#605e5c;font-size:.82rem">${_goodsLineSubtotal(l).toLocaleString()}</td>
+      <td id="goods-subtotal-${i}" style="text-align:right;color:#605e5c;font-size:.82rem">${_goodsLineSubtotalDisplay(l)}</td>
       <td><button class="btn-del" onclick="deleteGoodsLine(${i})">✕</button></td>
     </tr>`).join('');
   calcGoodsTotal();
 }
 function _goodsLineSubtotal(l){ return (parseFloat(l.amount)||0)*(parseFloat(l.qty)||1); }
+function _goodsLineSubtotalDisplay(l){
+  const sub = _goodsLineSubtotal(l);
+  const cur = getSelectedCurrency();
+  if(cur==='KRW') return sub.toLocaleString();
+  const rate = getSelectedExRate();
+  const krw = Math.round(sub*rate);
+  return `${sub.toLocaleString()} <span style="font-size:10px">${cur}</span><br><span style="font-size:10px;color:#a19f9d">(≈ ${krw.toLocaleString()} KRW)</span>`;
+}
 function updateGoodsSubtotal(i){
   const cell = document.getElementById('goods-subtotal-'+i);
-  if(cell) cell.textContent = _goodsLineSubtotal(goodsLines[i]).toLocaleString();
+  if(cell) cell.innerHTML = _goodsLineSubtotalDisplay(goodsLines[i]);
+}
+function renderAllGoodsSubtotals(){
+  goodsLines.forEach((l,i)=>updateGoodsSubtotal(i));
 }
 // ── 통화/환율 (ACC Voucher와 동일 파일 acc_voucher_exchange.xlsx 재사용) ──
 function getSelectedCurrency(){ return (document.getElementById('v-currency')||{value:'KRW'}).value || 'KRW'; }
@@ -1117,6 +1128,7 @@ function calcGoodsTotal(){
     const krw = Math.round(total*rate);
     document.getElementById('goods-total-display').innerHTML = `${total.toLocaleString()} <span style="font-size:14px">${cur}</span> <span style="font-size:12px;font-weight:400;color:#605e5c">(≈ ${krw.toLocaleString()} KRW)</span>`;
   }
+  renderAllGoodsSubtotals();
   checkGoodsAccMatch();
   renderApprovalPreview();
 }
@@ -1187,7 +1199,12 @@ function checkGoodsAccMatch(){
   const match = Math.abs(goodsTotal-accIncl) < 1;
   if(match){
     if(banner) banner.innerHTML = '<span style="color:#107c10;font-weight:600">✓ Description of Goods 합계와 일치합니다</span>';
-    if(totalField){ totalField.value = accExcl.toLocaleString()+(cur!=='KRW'?(' '+cur):''); totalField.style.cssText='text-align:right;font-weight:700;font-size:13px;color:#0078d4'; }
+    if(totalField){
+      const rate = getSelectedExRate();
+      const krwAmt = cur==='KRW' ? accExcl : Math.round(accExcl*rate);
+      totalField.value = cur==='KRW' ? krwAmt.toLocaleString()+' KRW' : krwAmt.toLocaleString()+' KRW  (＝ '+accExcl.toLocaleString()+' '+cur+')';
+      totalField.style.cssText='text-align:right;font-weight:700;font-size:13px;color:#0078d4';
+    }
   } else {
     if(banner) banner.innerHTML = '<span style="color:#a4262c;font-weight:600">✗ Description of Goods 합계와 일치하지 않습니다 (차이: '+Math.round(goodsTotal-accIncl).toLocaleString()+' '+cur+')</span>';
     if(totalField){ totalField.value = '금액 불일치 — 2번과 4번의 합계를 맞춰주세요'; totalField.style.cssText='text-align:right;font-weight:500;font-size:11px;color:#a4262c'; }
