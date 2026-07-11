@@ -2114,7 +2114,7 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
   const cellB='border:1px solid #000;padding:4px 6px;font-size:10.5px';
   const lblB=cellB+';background:#f0f0f0;font-weight:600;white-space:nowrap';
   const apprByRole={}; (apprList||[]).forEach(a=>{apprByRole[a.ApproverRole]=a;});
-  const roleCols=[['TL','Team Leader'],['DH','Department\\nHead'],['CEO','CEO'],['RD','RD'],['BC','Budget\\nController'],['CM','Controlling\\nManager'],['CFO','CFO']];
+  const roleCols=[['TL','Team Leader'],['DH','Dept. Head'],['CEO','CEO'],['RD','RD'],['BC','Budget Ctr'],['CM','Ctr Head'],['CFO','CFO']];
   const rules = APPROVAL_RULES.PR;
   const NA='<span style="display:inline-block;background:#e1dfdd;color:#484644;font-size:8px;font-weight:800;padding:2px 6px;border-radius:3px">N/A</span>';
   const fmtDT = s => { if(!s) return ''; const d=new Date(s); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; };
@@ -2137,6 +2137,7 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
   </tr>`).join('');
   const accTotal = (accL||[]).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
   const accVat = (accL||[]).filter(l=>l.isVat).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
+  const hasVatLine = (accL||[]).some(l=>l.isVat);
 
   const apprRow = roleCols.map(rc=>{
     const role=rc[0]; const a=apprByRole[role];
@@ -2173,7 +2174,7 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
     </table>
     <div style="font-weight:700;font-size:11px;margin-top:8px;border:1px solid #000;padding:4px 6px;background:#f0f0f0">Requester</div>
     <table style="width:100%;border-collapse:collapse;border:1px solid #000;border-top:none;table-layout:fixed">
-      <colgroup><col style="width:8%"><col style="width:21%"><col style="width:13%"><col style="width:18%"><col style="width:10%"><col style="width:30%"></colgroup>
+      <colgroup><col style="width:10%"><col style="width:20%"><col style="width:13%"><col style="width:29%"><col style="width:8%"><col style="width:20%"></colgroup>
       <tr>
         <td style="${lblB}" rowspan="2">Name</td><td style="${cellB}" rowspan="2">${esc(requesterKoName)}<br>(${esc(v.RequesterEmail)})</td>
         <td style="${lblB}">Department</td><td style="${cellB}">${esc(v.Department)}</td>
@@ -2198,8 +2199,8 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
       <colgroup><col style="width:20%"><col style="width:24%"><col style="width:12%"><col style="width:14%"><col style="width:10%"><col style="width:20%"></colgroup>
       <tr><td style="${lblB};text-align:center">Item Description</td><td style="${lblB};text-align:center">G/L Acc. Description</td><td style="${lblB};text-align:center">G/L Acc. No.</td><td style="${lblB};text-align:center">Cost Center</td><td style="${lblB};text-align:center">Currency</td><td style="${lblB};text-align:center">Amount</td></tr>
       ${accRows}
-      <tr><td colspan="5" style="${cellB};text-align:right;font-weight:700">TOTAL (Incl. VAT)</td><td style="${cellB};text-align:right;font-weight:700">${fmtK(accTotal)}</td></tr>
-      <tr><td colspan="5" style="${cellB};text-align:right;font-weight:700">TOTAL (Excl. VAT)</td><td style="${cellB};text-align:right;font-weight:700">${fmtK(accTotal-accVat)}</td></tr>
+      ${hasVatLine ? `<tr><td colspan="5" style="${cellB};text-align:right;font-weight:700">TOTAL (Incl. VAT)</td><td style="${cellB};text-align:right;font-weight:700">${fmtK(accTotal)}</td></tr>` : ''}
+      <tr><td colspan="5" style="${cellB};text-align:right;font-weight:700">${hasVatLine?'TOTAL (Excl. VAT)':'TOTAL'}</td><td style="${cellB};text-align:right;font-weight:700">${fmtK(accTotal-accVat)}</td></tr>
     </table>
     <div style="font-weight:700;font-size:11px;margin-top:8px;border:1px solid #000;padding:4px 6px;background:#f0f0f0">Remarks</div>
     <div style="border:1px solid #000;border-top:none;padding:6px 8px;font-size:10.5px">${esc((v.Remarks||'').split(';').filter(Boolean).join(', ')||'-')}</div>
