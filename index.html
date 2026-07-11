@@ -373,7 +373,10 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
       <div id="ex-rate-banner-acc"></div>
       <div class="lines-header">
         <span style="font-size:12px;color:#605e5c">G/L Account · Cost Center · 금액을 입력하세요 (VAT 라인은 자동 추가)</span>
-        <button class="btn-add" onclick="addAccLine()">+ 라인 추가</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn-add" style="background:#fff;color:#0078d4;border:1px solid #0078d4" onclick="addVatLine()">+ VAT 라인 자동추가 (10%)</button>
+          <button class="btn-add" onclick="addAccLine()">+ 라인 추가</button>
+        </div>
       </div>
       <div class="lines-scroll">
         <table class="lines" id="acc-table">
@@ -1164,7 +1167,7 @@ function renderAccLines(){
       </td>
       <td><input type="text" value="${l.amount?Number(l.amount).toLocaleString():''}" style="text-align:right" ${l.isVat?'':'oninput="fmtInput(this);accLines['+i+'].amount=parseComma(this.value);calcAccTotal()"'} ${l.isVat?'readonly':''}></td>
       <td><button class="btn-del" onclick="deleteAccLine(${i})" title="${l.isVat?'VAT 라인 제거':'삭제'}">✕</button></td>
-    </tr>`).join('') + `<tr><td colspan="6" style="border:none;padding-top:8px"><button class="btn-add" onclick="addVatLine()">+ VAT 라인 자동추가 (10%)</button></td></tr>`;
+    </tr>`).join('');
   calcAccTotal();
 }
 function calcAccTotal(){
