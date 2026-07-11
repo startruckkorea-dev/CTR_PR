@@ -453,7 +453,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
       </div>
       <div class="list-table-scroll">
       <table class="list-table">
-        <thead><tr><th style="width:44px;text-align:center">번호</th><th>Title</th><th>Purchase Category</th><th>G/L Acc.No.</th><th>Cost Center</th><th style="text-align:right">Total Amount (Excl. VAT)</th><th style="text-align:right">VAT (If exists.)</th><th>상태</th><th>신청일</th><th style="width:90px;text-align:center">Withdraw</th></tr></thead>
+        <thead><tr><th style="width:44px;text-align:center">번호</th><th>Title</th><th>Purchase Category</th><th>G/L Acc.No.</th><th>Cost Center</th><th style="text-align:right">Total Amount(KRW) (Excl. VAT)</th><th style="text-align:right">VAT(KRW) (If exists.)</th><th>상태</th><th>신청일</th><th style="width:90px;text-align:center">Withdraw</th></tr></thead>
         <tbody id="list-body"><tr><td colspan="10" class="list-empty">불러오는 중...</td></tr></tbody>
       </table>
       </div>
@@ -466,7 +466,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
       <div class="card-title">결재함</div>
       <div class="list-table-scroll">
       <table class="list-table">
-        <thead><tr><th style="width:44px;text-align:center">번호</th><th>Title</th><th>Purchase Category</th><th>G/L Acc.No.</th><th>Cost Center</th><th>신청자</th><th style="text-align:right">Total Amount (Excl. VAT)</th><th style="text-align:right">VAT (If exists.)</th><th>상태</th><th>신청일</th><th style="width:120px;text-align:center">처리</th></tr></thead>
+        <thead><tr><th style="width:44px;text-align:center">번호</th><th>Title</th><th>Purchase Category</th><th>G/L Acc.No.</th><th>Cost Center</th><th>신청자</th><th style="text-align:right">Total Amount(KRW) (Excl. VAT)</th><th style="text-align:right">VAT(KRW) (If exists.)</th><th>상태</th><th>신청일</th><th style="width:120px;text-align:center">처리</th></tr></thead>
         <tbody id="appr-body"><tr><td colspan="11" class="list-empty">불러오는 중...</td></tr></tbody>
       </table>
       </div>
@@ -492,7 +492,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
       </div>
       <div class="list-table-scroll">
       <table class="list-table">
-        <thead><tr><th style="width:44px;text-align:center">번호</th><th>Title</th><th>Purchase Category</th><th>G/L Acc.No.</th><th>Cost Center</th><th>신청자</th><th style="text-align:right">Total Amount (Excl. VAT)</th><th style="text-align:right">VAT (If exists.)</th><th>상태</th><th>신청일</th></tr></thead>
+        <thead><tr><th style="width:44px;text-align:center">번호</th><th>Title</th><th>Purchase Category</th><th>G/L Acc.No.</th><th>Cost Center</th><th>신청자</th><th style="text-align:right">Total Amount(KRW) (Excl. VAT)</th><th style="text-align:right">VAT(KRW) (If exists.)</th><th>상태</th><th>신청일</th></tr></thead>
         <tbody id="admin-body"><tr><td colspan="10" class="list-empty">불러오는 중...</td></tr></tbody>
       </table>
       </div>
@@ -576,7 +576,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
     <div class="modal-body" style="text-align:center;padding:28px 20px">
       <div id="alert-icon" style="font-size:2rem;margin-bottom:10px">✅</div>
       <div id="alert-title" style="font-size:1rem;font-weight:700;color:#323130;margin-bottom:6px"></div>
-      <div id="alert-sub" style="font-size:.82rem;color:#605e5c;margin-bottom:18px"></div>
+      <div id="alert-sub" style="font-size:.82rem;color:#605e5c;margin-bottom:18px;white-space:pre-line"></div>
       <button class="btn-primary" style="width:100%" onclick="closeAlert()">확인</button>
     </div>
   </div>
@@ -1701,7 +1701,7 @@ function _glCcParts(v){
   const first = lines[0];
   return { gl:first.gl||'-', glName:first.glName||'-', cctr:first.cctr||'-', extra: lines.length-1 };
 }
-// ── 결재함/관리자 목록용: Total Amount (Excl. VAT) / VAT 를 KRW 기준으로 재계산 ──
+// ── 결재함/관리자 목록용: Total Amount(KRW) (Excl. VAT) / VAT 를 KRW 기준으로 재계산 ──
 function _amountBreakdown(v){
   let accL = [];
   try { accL = JSON.parse(v.AccountLinesJSON||'[]'); } catch(e){}
@@ -1917,11 +1917,29 @@ async function openDetail(spId, fromTab){
     <div class="det-row"><div class="det-lbl">상태</div><div class="det-val"><span class="badge-${(v.Status||'').replace(/[()]/g,'')}">${v.Status||'-'}</span></div></div>
 
     <div class="det-sec">Description of Goods</div>
-    ${goods.map(g=>`<div class="det-row"><div class="det-lbl">${g.desc||'-'}</div><div class="det-val">단가 ${Math.round(g.amount||0).toLocaleString()} × 수량 ${g.qty||1} = <b>${Math.round((g.amount||0)*(g.qty||1)).toLocaleString()} KRW</b></div></div>`).join('')||'<div class="det-row"><div class="det-val">없음</div></div>'}
-    <div class="det-row"><div class="det-lbl"><b>TOTAL AMOUNT</b></div><div class="det-val"><b>${Math.round(v.TotalAmount||0).toLocaleString()} KRW</b></div></div>
+    ${(()=>{
+      const cur = v.Currency||'KRW';
+      const rate = (cur!=='KRW' && v.ExchangeRate) ? parseFloat(v.ExchangeRate) : 1;
+      if(!goods.length) return '<div class="det-row"><div class="det-val">없음</div></div>';
+      return goods.map(g=>{
+        const sub = Math.round((g.amount||0)*(g.qty||1));
+        const krwNote = cur!=='KRW' ? ` <span style="color:#a19f9d;font-weight:400">(≈ ${Math.round(sub*rate).toLocaleString()} KRW)</span>` : '';
+        return `<div class="det-row"><div class="det-lbl">${g.desc||'-'}</div><div class="det-val">단가 ${Math.round(g.amount||0).toLocaleString()} × 수량 ${g.qty||1} = <b>${sub.toLocaleString()} ${cur}</b>${krwNote}</div></div>`;
+      }).join('');
+    })()}
+    <div class="det-row"><div class="det-lbl"><b>TOTAL AMOUNT</b></div><div class="det-val"><b>${Math.round(v.TotalAmount||0).toLocaleString()} KRW</b>${(v.Currency&&v.Currency!=='KRW')?` <span style="color:#605e5c;font-weight:400">(＝ ${goods.reduce((s,g)=>s+(g.amount||0)*(g.qty||1),0).toLocaleString()} ${v.Currency})</span>`:''}</div></div>
 
     <div class="det-sec">Accounting Information</div>
-    ${accL.map(l=>`<div class="det-row"><div class="det-lbl">${l.glName||'-'} (${l.gl||'-'})</div><div class="det-val">${l.cctrName||l.cctr?((l.cctrName||l.cctr)+' · '):''}${Math.round(l.amount||0).toLocaleString()} KRW</div></div>`).join('')||'<div class="det-row"><div class="det-val">없음</div></div>'}
+    ${(()=>{
+      const cur = v.Currency||'KRW';
+      const rate = (cur!=='KRW' && v.ExchangeRate) ? parseFloat(v.ExchangeRate) : 1;
+      if(!accL.length) return '<div class="det-row"><div class="det-val">없음</div></div>';
+      return accL.map(l=>{
+        const amt = Math.round(l.amount||0);
+        const krwNote = cur!=='KRW' ? ` <span style="color:#a19f9d;font-weight:400">(≈ ${Math.round(amt*rate).toLocaleString()} KRW)</span>` : '';
+        return `<div class="det-row"><div class="det-lbl">${l.glName||'-'} (${l.gl||'-'})</div><div class="det-val">${l.cctrName||l.cctr?((l.cctrName||l.cctr)+' · '):''}${amt.toLocaleString()} ${cur}${krwNote}</div></div>`;
+      }).join('');
+    })()}
 
     <div class="det-sec">Remarks</div>
     <div class="det-row"><div class="det-val">${(v.Remarks||'').split(';').filter(Boolean).join(', ')||'-'}</div></div>
