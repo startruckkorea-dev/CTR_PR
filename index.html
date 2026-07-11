@@ -390,17 +390,19 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
             <th style="width:22%">G/L Acc. Description</th>
             <th style="width:12%">G/L Acc. No.</th>
             <th style="width:14%">Cost Center</th>
-            <th style="width:16%">Amount (KRW)</th>
+            <th style="width:16%" id="acc-amount-col-header">Amount (KRW)</th>
             <th style="width:34px"></th>
           </tr></thead>
           <tbody id="acc-tbody"></tbody>
         </table>
       </div>
       <div class="totals-bar" style="padding:10px 16px">
-        <span class="total-label">TOTAL (Incl. VAT)</span>
-        <span class="total-main" id="acc-total-incl-display">0</span>
-        <span style="width:1px;height:16px;background:#d2d0ce;margin:0 4px"></span>
-        <span class="total-label">TOTAL (Excl. VAT)</span>
+        <span id="acc-total-incl-group" style="display:none;align-items:center;gap:12px">
+          <span class="total-label">TOTAL (Incl. VAT)</span>
+          <span class="total-main" id="acc-total-incl-display">0</span>
+          <span style="width:1px;height:16px;background:#d2d0ce;margin:0 4px"></span>
+        </span>
+        <span class="total-label" id="acc-total-excl-label">TOTAL (Excl. VAT)</span>
         <span class="total-main" id="acc-total-excl-display">0</span>
       </div>
       <div id="acc-goods-match-banner" style="text-align:right;font-size:12px;margin-top:6px"></div>
@@ -1183,6 +1185,7 @@ function renderAccLines(){
 function calcAccTotal(){
   const cur = getSelectedCurrency();
   const rate = getSelectedExRate();
+  const hasVat = accLines.some(l=>l.isVat);
   const totalIncl = accLines.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
   const vatAmt = accLines.filter(l=>l.isVat).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
   const totalExcl = totalIncl - vatAmt;
@@ -1191,8 +1194,15 @@ function calcAccTotal(){
     const krw = Math.round(amt*rate);
     return `${amt.toLocaleString()} ${cur} <span style="font-size:11px;color:#605e5c">(≈ ${krw.toLocaleString()} KRW)</span>`;
   };
+  const inclGroup = document.getElementById('acc-total-incl-group');
+  const exclLabel = document.getElementById('acc-total-excl-label');
+  if(inclGroup) inclGroup.style.display = hasVat ? 'inline-flex' : 'none';
+  if(exclLabel) exclLabel.textContent = hasVat ? 'TOTAL (Excl. VAT)' : 'TOTAL';
   document.getElementById('acc-total-incl-display').innerHTML = fmtDual(totalIncl);
   document.getElementById('acc-total-excl-display').innerHTML = fmtDual(totalExcl);
+  // Amount 컬럼 헤더도 현재 통화에 맞춰 갱신 (KRW 고정 라벨 오해 방지)
+  const amtHeader = document.getElementById('acc-amount-col-header');
+  if(amtHeader) amtHeader.textContent = cur==='KRW' ? 'Amount (KRW)' : `Amount (${cur})`;
   checkGoodsAccMatch();
 }
 // ── 2.Description of Goods 합계 vs 4.Accounting Information 합계 일치 여부 검증 (ACC Voucher의 DR/CR 일치 검증과 동일한 개념) ──
