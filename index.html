@@ -588,6 +588,19 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
   </div>
 </div>
 
+<!-- 결재 승인/반려 확인 모달 -->
+<div id="appr-confirm-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1500;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:10px;padding:24px 28px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+    <div id="appr-confirm-title" style="font-size:1rem;font-weight:700;color:#323130;margin-bottom:10px"></div>
+    <div id="appr-confirm-msg" style="font-size:.85rem;color:#605e5c;margin-bottom:12px"></div>
+    <textarea id="appr-confirm-comment" style="width:100%;min-height:70px;padding:8px 10px;border:1px solid #d2d0ce;border-radius:4px;font-size:.85rem;font-family:inherit;box-sizing:border-box;resize:vertical"></textarea>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+      <button class="btn-secondary" onclick="closeApprConfirm()">취소</button>
+      <button id="appr-confirm-ok" onclick="confirmApprAction()" style="background:#107c10;color:#fff;border:none;border-radius:4px;padding:8px 24px;font-size:.85rem;cursor:pointer;font-family:inherit">승인</button>
+    </div>
+  </div>
+</div>
+
 <div id="dyn-loading"><div class="spinner"></div><span style="font-size:13px;color:#605e5c">처리 중...</span></div>
 
 <script>
@@ -1827,16 +1840,39 @@ function renderApprovalQueue(){
       <td><span class="badge-${(a.Status||'').replace(/[()]/g,'')}">${a.Status||'-'}</span></td>
       <td style="font-size:11px;color:#605e5c;white-space:nowrap">${_appliedDateTime(a._req)}</td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
-        <button class="btn-primary" style="padding:3px 10px;font-size:.72rem;background:#107c10" onclick="processApproval(${a._apId},'승인',${a.RequestID})">승인</button>
-        <button class="btn-danger" style="padding:3px 10px;font-size:.72rem" onclick="processApproval(${a._apId},'반려',${a.RequestID})">반려</button>
+        <button class="btn-primary" style="padding:3px 10px;font-size:.72rem;background:#107c10" onclick="showApprConfirm(${a._apId},'승인',${a.RequestID})">승인</button>
+        <button class="btn-danger" style="padding:3px 10px;font-size:.72rem" onclick="showApprConfirm(${a._apId},'반려',${a.RequestID})">반려</button>
       </td>
     </tr>`;
   }).join('');
 }
 
+// ── 승인/반려 확인 팝업 (ACC Voucher와 동일: 반려 시 사유 필수 입력) ──
+let _pendingAppr = null;
+function showApprConfirm(apprId, action, reqId){
+  _pendingAppr = {apprId, action, reqId};
+  const isReject = action==='반려';
+  document.getElementById('appr-confirm-title').textContent = isReject ? '❌ 반려 확인' : '✅ 승인 확인';
+  document.getElementById('appr-confirm-msg').textContent = isReject ? '반려 사유를 입력해주세요. (필수)' : '이 PR을 승인하시겠습니까?';
+  document.getElementById('appr-confirm-comment').value = '';
+  document.getElementById('appr-confirm-comment').placeholder = isReject ? '반려 사유 입력 (필수)' : '의견 입력 (선택사항)';
+  const okBtn = document.getElementById('appr-confirm-ok');
+  okBtn.textContent = isReject ? '반려' : '승인';
+  okBtn.style.background = isReject ? '#a4262c' : '#107c10';
+  document.getElementById('appr-confirm-modal').style.display = 'flex';
+}
+function closeApprConfirm(){ document.getElementById('appr-confirm-modal').style.display='none'; }
+async function confirmApprAction(){
+  if(!_pendingAppr) return;
+  const {apprId, action, reqId} = _pendingAppr;
+  const comment = document.getElementById('appr-confirm-comment').value.trim();
+  if(action==='반려' && !comment){ alert('반려 사유를 입력해주세요.'); return; }
+  closeApprConfirm();
+  await processApproval(apprId, action, reqId, comment);
+}
+
 // ── 승인/반려 처리 ──
-async function processApproval(apprId, action, reqId){
-  if(!confirm(action==='승인'?'승인 처리하시겠습니까?':'반려 처리하시겠습니까?')) return;
+async function processApproval(apprId, action, reqId, comment=''){
   loading(true, '처리 중...');
   try {
     const curRes = await fetch(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items/${apprId}?$expand=fields`,
@@ -1845,7 +1881,7 @@ async function processApproval(apprId, action, reqId){
     if(cur.fields.Status !== '대기'){ showAlert('처리 불가', '이미 처리되었거나 대기 상태가 아닙니다.', '⚠️'); loading(false); return; }
 
     await api(`/sites/${siteId}/lists/${LIST_APPROVALS}/items/${apprId}/fields`, 'PATCH', {
-      Status: action==='승인'?'승인':'반려', ApprovalDate: new Date().toISOString()
+      Status: action==='승인'?'승인':'반려', ApprovalDate: new Date().toISOString(), Comment: comment
     });
 
     if(action==='반려'){
@@ -2038,6 +2074,7 @@ async function openDetail(spId, fromTab){
       return `<div class="appr-item"><div>
         <div><b>${a.ApprovalOrder}차 결재자(${ROLE_LABELS[a.ApproverRole]||a.ApproverRole})</b></div>
         <div style="font-size:.72rem;color:#a19f9d">${a.ApproverName||'-'} · ${a.ApproverEmail||''}</div>
+        ${a.Comment?`<div style="font-size:.72rem;background:#fff;border:1px solid #edebe9;border-radius:4px;padding:2px 6px;display:inline-block;margin-top:2px">💬 ${a.Comment}</div>`:''}
       </div><div class="status-${(a.Status||'').replace(/[()]/g,'')}">${a.Status||'-'}</div></div>`;
     }).join('');
 
@@ -2046,8 +2083,8 @@ async function openDetail(spId, fromTab){
     const btnWrap = document.getElementById('detail-appr-action-btns');
     if(btnWrap){
       btnWrap.innerHTML = myPendingItem
-        ? `<button class="btn-primary" style="padding:8px 22px;font-size:.8rem;background:#107c10;margin-right:8px" onclick="processApproval(${myPendingItem.id},'승인',${v._spId})">✅ 승인</button>
-           <button class="btn-danger" style="padding:8px 22px;font-size:.8rem" onclick="processApproval(${myPendingItem.id},'반려',${v._spId})">❌ 반려</button>`
+        ? `<button class="btn-primary" style="padding:8px 22px;font-size:.8rem;background:#107c10;margin-right:8px" onclick="showApprConfirm(${myPendingItem.id},'승인',${v._spId})">✅ 승인</button>
+           <button class="btn-danger" style="padding:8px 22px;font-size:.8rem" onclick="showApprConfirm(${myPendingItem.id},'반려',${v._spId})">❌ 반려</button>`
         : '';
     }
   } catch(e){
