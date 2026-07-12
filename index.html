@@ -619,6 +619,28 @@ const SCOPES = ['User.Read','Sites.ReadWrite.All','Files.ReadWrite.All'];
 const BP_FILE_NAME = 'Master data List 2014_Final(DTK).xlsx';
 
 let msal_g = null, user = null, siteId = null, nasId = null;
+// boot() 시 CCTR/BP/GL/직원/환율 마스터 로더가 동시에 fire-and-forget으로 시작되는데,
+// 각자 siteId가 없으면 개별적으로 /sites/{path} 를 호출해서 초기 로딩 시 동일한 조회가 5중으로 중복 발생했음.
+// 하나의 공유 프라미스로 묶어서 최초 1번만 실제 요청하고 나머지는 그 결과를 기다리게 함.
+let _siteIdPromise = null;
+async function ensureSiteId(){
+  if(siteId) return siteId;
+  if(!_siteIdPromise) _siteIdPromise = api('/sites/'+SITE_PATH_DB).then(s=>{ siteId=s.id; return siteId; });
+  return _siteIdPromise;
+}
+// loadEmployees()와 loadSystemConfig()가 boot() 시 동시에 시작되면서 각자 동일한
+// /sites/{siteId}/drives 조회를 중복 발생시켰던 부분도 siteId와 동일한 방식으로 공유 처리.
+let _docDrivePromise = null;
+async function ensureDocDrive(){
+  if(!_docDrivePromise){
+    _docDrivePromise = (async()=>{
+      await ensureSiteId();
+      const drivesData = await api('/sites/'+siteId+'/drives');
+      return drivesData.value.find(d=>['문서','Documents','Shared Documents'].includes(d.name)) || drivesData.value[0];
+    })();
+  }
+  return _docDrivePromise;
+}
 let employeeData = []; // Team Leader/Department Head 동적 선택용 (employee_search.xlsx, GW와 동일 파일)
 let _dynApproverState = {}; // {role: {dept, team, email}} — 재렌더링되어도 선택값 유지
 let bpData = [];
@@ -657,7 +679,7 @@ let COST_CENTERS = [];
 async function loadGLMaster() {
   try {
     const t = await token();
-    if(!siteId) { const s=await api('/sites/'+SITE_PATH_DB); siteId=s.id; }
+    await ensureSiteId();
     const res = await fetch(GRAPH+'/sites/'+siteId+'/drive/root:/'+encodeURIComponent(COA_PC_FILE_NAME)+':/content',
       {headers:{Authorization:'Bearer '+t}});
     if(!res.ok) throw new Error(COA_PC_FILE_NAME+' HTTP '+res.status);
@@ -690,9 +712,7 @@ async function loadGLMaster() {
 // ── 직원 검색 데이터 (Team Leader/Department Head 동적 선택용, GW와 동일한 employee_search.xlsx 재사용) ──
 async function loadEmployees(){
   try{
-    if(!siteId) { const s=await api('/sites/'+SITE_PATH_DB); siteId=s.id; }
-    const drivesData=await api('/sites/'+siteId+'/drives');
-    const docDrive=drivesData.value.find(d=>['문서','Documents','Shared Documents'].includes(d.name))||drivesData.value[0];
+    const docDrive = await ensureDocDrive();
     const t=await token();
     const res=await fetch(GRAPH+'/drives/'+docDrive.id+'/root:/employee_search.xlsx:/content',{headers:{Authorization:'Bearer '+t}});
     if(!res.ok)throw new Error('직원 데이터 로드 실패 (HTTP '+res.status+')');
@@ -715,10 +735,7 @@ let _sysConfig = null;
 async function loadSystemConfig() {
   if (_sysConfig) return _sysConfig;
   try {
-    if(!siteId){const s=await api('/sites/'+SITE_PATH_DB);siteId=s.id;}
-    const drivesRes = await api('/sites/'+siteId+'/drives');
-    let docDrive = (drivesRes.value||[]).find(d=>['Documents','문서','Shared Documents'].includes(d.name));
-    if(!docDrive && drivesRes.value?.length) docDrive = drivesRes.value[0];
+    const docDrive = await ensureDocDrive();
     const t = await token();
     const res = await fetch(GRAPH+'/drives/'+docDrive.id+'/root:/system_config_final.xlsx:/content',
       {headers:{Authorization:'Bearer '+t}});
@@ -877,8 +894,7 @@ async function boot(account) {
     renderApprovalPreview();
   }).catch(()=>{ _configLoaded = true; });
 
-  if(!siteId){ api('/sites/'+SITE_PATH_DB).then(s=>{ siteId=s.id; checkApprovalBadge(); }).catch(()=>{}); }
-  else checkApprovalBadge();
+  ensureSiteId().then(checkApprovalBadge).catch(()=>{});
   setInterval(()=>{ try{ checkApprovalBadge(); }catch(e){} }, 60000);
 }
 function isMe2(emailList){
@@ -890,7 +906,7 @@ function isMe2(emailList){
 async function loadCCTRMaster(userName) {
   try {
     const t = await token();
-    if(!siteId) { const s=await api('/sites/'+SITE_PATH_DB); siteId=s.id; }
+    await ensureSiteId();
     const searchRes = await api('/sites/'+siteId+"/drive/root/search(q='acc_cctr_list')");
     const found = (searchRes.value||[]).find(i=>(i.name||'').includes('acc_cctr_list'));
     if(!found) throw new Error('CCTR 파일 못 찾음');
@@ -972,7 +988,7 @@ async function loadBPMaster() {
       } catch(_){}
     }
     if(!fileItemId) {
-      if(!siteId) { const s=await api('/sites/'+SITE_PATH_DB); siteId=s.id; }
+      await ensureSiteId();
       const dbDrives = await api('/sites/'+siteId+'/drives');
       for(const drv of dbDrives.value) {
         try {
@@ -1112,7 +1128,7 @@ function renderExRateBanner(){
 }
 async function loadExchangeRates(){
   try{
-    if(!siteId){ const s=await api('/sites/'+SITE_PATH_DB); siteId=s.id; }
+    await ensureSiteId();
     const t=await token();
     const res=await fetch(GRAPH+'/sites/'+siteId+'/drive/root:/acc_voucher_exchange.xlsx:/content',{headers:{Authorization:'Bearer '+t}});
     if(!res.ok) throw new Error('환율 파일 로드 실패');
@@ -1510,7 +1526,7 @@ async function loadExistingPR() {
   const titleInput = document.getElementById('load-pr-id');
   const titleVal = (titleInput.value||'').trim();
   if(!titleVal) { alert('불러올 PR ID(CTR-PR-YYYY-MM-DD_ID-N)를 입력하세요.'); return; }
-  if(!siteId){ try{ const s=await api('/sites/'+SITE_PATH_DB); siteId=s.id; }catch(e){ showAlert('오류','SharePoint 사이트 접근에 실패했습니다.','⚠️'); return; } }
+  try{ await ensureSiteId(); }catch(e){ showAlert('오류','SharePoint 사이트 접근에 실패했습니다.','⚠️'); return; }
   try {
     const data = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items?$expand=fields&$filter=fields/Title eq '${titleVal}'&$top=5`);
     if(!data.value.length){ showAlert('PR을 찾을 수 없습니다', titleVal, '⚠️'); return; }
@@ -1629,7 +1645,7 @@ async function savePR(status){
   const btn = document.querySelector(`button[onclick*="savePR('${status}')"]`);
   try {
     if(btn){btn.disabled=true; btn.textContent='저장 중...';}
-    if(!siteId){const s=await api('/sites/'+SITE_PATH_DB);siteId=s.id;}
+    await ensureSiteId();
 
     const reqRes = await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items`, 'POST', {fields});
     const requestId = reqRes.id;
