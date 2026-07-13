@@ -1248,7 +1248,7 @@ function checkGoodsAccMatch(){
     if(totalField){ totalField.value = '2번, 4번 항목의 Excl. VAT 금액이 동일한 경우 입력됩니다'; totalField.style.cssText='text-align:right;font-weight:400;font-size:11px;color:#a19f9d'; }
     return;
   }
-  const match = Math.abs(goodsTotal-accIncl) < 1;
+  const match = Math.abs(goodsTotal-accExcl) < 1;
   if(match){
     if(banner) banner.innerHTML = '<span style="color:#107c10;font-weight:600">✓ 2. Description of Goods 합계와 일치합니다</span>';
     if(totalField){
@@ -1258,7 +1258,7 @@ function checkGoodsAccMatch(){
       totalField.style.cssText='text-align:right;font-weight:700;font-size:13px;color:#0078d4';
     }
   } else {
-    if(banner) banner.innerHTML = '<span style="color:#a4262c;font-weight:600">✗ 2. Description of Goods(Excl. VAT) 합계와 일치하지 않습니다 (차이: '+Math.round(goodsTotal-accIncl).toLocaleString()+' '+cur+')</span>';
+    if(banner) banner.innerHTML = '<span style="color:#a4262c;font-weight:600">✗ 2. Description of Goods(Excl. VAT) 합계와 일치하지 않습니다 (차이: '+Math.round(goodsTotal-accExcl).toLocaleString()+' '+cur+')</span>';
     if(totalField){ totalField.value = '금액 불일치 — 2번과 4번(Excl. VAT)의 합계를 맞춰주세요'; totalField.style.cssText='text-align:right;font-weight:500;font-size:11px;color:#a4262c'; }
   }
 }
@@ -1587,7 +1587,9 @@ async function savePR(status){
   if(status==='대기'){
     const goodsTotal = goodsLines.reduce((s,l)=>s+(parseFloat(l.amount)||0)*(parseFloat(l.qty)||1),0);
     const accIncl = accLines.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
-    if(Math.abs(goodsTotal-accIncl) >= 1){
+    const accVatAmt = accLines.filter(l=>l.isVat).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
+    const accExcl = accIncl - accVatAmt;
+    if(Math.abs(goodsTotal-accExcl) >= 1){
       showAlert('금액 불일치', '2. Description of Goods(Excl. VAT) 합계와 4. Accounting Information(Excl. VAT) 합계가 일치하지 않습니다.\n두 항목의 합계를 맞춰주세요.', '⚠️');
       return;
     }
