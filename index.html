@@ -1119,7 +1119,7 @@ function renderExRateBanner(){
     const r = window._cachedExRates[c];
     return r ? `<span><b>${c}</b> ${Number(r).toLocaleString()}</span>` : '';
   }).filter(Boolean).join('<span style="color:#d2d0ce;margin:0 4px">|</span>');
-  const html = `<div style="background:#f0f6ff;border:1px solid #c7e0f4;border-radius:4px;padding:8px 14px;margin-top:2px;margin-bottom:16px">
+  const html = `<div style="background:#f0f6ff;border:1px solid #c7e0f4;border-radius:4px;padding:8px 14px;margin-top:2px">
     <div style="margin-bottom:2px"><span style="color:#0078d4;font-weight:600;font-size:12px">${today} 기준 참고 환율</span><span style="font-size:11px;color:#a19f9d;margin-left:8px">오늘 날짜 환율로 자동 기입</span></div>
     <div style="font-size:11px;color:#a19f9d;margin-bottom:4px">· 수정 필요 시 BU Admin 확인 &nbsp;·&nbsp; 이전 날짜 환율이 뜨는 경우 <b>Ctrl+Shift+R</b> 로 새로고침</div>
     <div style="font-size:12px;color:#323130">${parts||'<span style=\"color:#a19f9d\">참고 환율 정보를 불러오지 못했습니다.</span>'}</div>
@@ -1904,10 +1904,6 @@ async function processApproval(apprId, action, reqId, comment=''){
 
     if(action==='반려'){
       await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${reqId}/fields`, 'PATCH', {Status:'반려'});
-      const allAppr = await getApprovalsForRequest(reqId, true);
-      for(const it of allAppr.value){
-        if(it.fields.Status==='대기(잠김)') await api(`/sites/${siteId}/lists/${LIST_APPROVALS}/items/${it.id}/fields`,'PATCH',{Status:'반려(취소)'});
-      }
     } else {
       const allAppr = await getApprovalsForRequest(reqId, true);
       const sorted = allAppr.value.sort((a,b)=>(a.fields.ApprovalOrder||0)-(b.fields.ApprovalOrder||0));
@@ -2397,7 +2393,7 @@ async function exportDetailPdf(){
   const apprList = window._currentApprList||[];
   const btn = document.getElementById('btn-export-pdf');
   const btnOrig = btn ? btn.innerHTML : null;
-  loading(true, 'PDF 생성 중...');
+  if(btn){ btn.innerHTML='⏳ 생성 중...'; btn.disabled=true; }
   try {
     const container = document.createElement('div');
     container.style.position='fixed'; container.style.left='-9999px'; container.style.top='0';
@@ -2414,7 +2410,7 @@ async function exportDetailPdf(){
     if(detailEl){ if(btn) btn.innerHTML='⏳ 첨부파일 병합 중...'; await appendAttachmentPagesToDoc(mainDoc, dataUrlToUint8, makeHeaderBytes, detailEl, btn); }
     await downloadPdfDoc(mainDoc, (v.Title||'CTR_PR')+'_공식양식.pdf');
   } catch(e){ showAlert('PDF 생성 실패', e.message, '⚠️'); }
-  finally { loading(false); if(btn) btn.innerHTML = btnOrig; }
+  finally { if(btn){ btn.innerHTML = btnOrig; btn.disabled=false; } }
 }
 
 // ── 상세 화면(화면 그대로) PDF 출력 — ACC Voucher와 동일 패턴: detail-body를 그대로 캡처 ──
@@ -2422,7 +2418,7 @@ async function exportDetailScreenPdf(){
   const v = window._currentDetail; if(!v) return;
   const btn = document.getElementById('btn-export-detail-pdf');
   const btnOrig = btn ? btn.innerHTML : null;
-  loading(true, 'PDF 생성 중...');
+  if(btn){ btn.innerHTML='⏳ 생성 중...'; btn.disabled=true; }
   try {
     const detailEl = document.getElementById('detail-body');
     if(!detailEl) throw new Error('상세 내용을 찾을 수 없습니다.');
@@ -2436,7 +2432,7 @@ async function exportDetailScreenPdf(){
     await appendAttachmentPagesToDoc(mainDoc, dataUrlToUint8, makeHeaderBytes, detailEl, btn);
     await downloadPdfDoc(mainDoc, (v.Title||'CTR_PR')+'_상세화면.pdf');
   } catch(e){ showAlert('PDF 생성 실패', e.message, '⚠️'); }
-  finally { loading(false); if(btn) btn.innerHTML = btnOrig; }
+  finally { if(btn){ btn.innerHTML = btnOrig; btn.disabled=false; } }
 }
 
 // ── MSAL 초기화 ──
