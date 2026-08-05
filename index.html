@@ -1721,6 +1721,7 @@ function switchTab(tab){
 // ── 내 신청서 목록 ──
 async function loadMyList(){
   const tbody = document.getElementById('list-body');
+  await ensureSiteId();
   if(!siteId){ tbody.innerHTML='<tr><td colspan="10" class="list-empty">SharePoint 사이트 접근 권한이 없습니다. IT 담당자에게 문의하세요.</td></tr>'; return; }
   tbody.innerHTML = '<tr><td colspan="10" class="list-empty">불러오는 중...</td></tr>';
   try {
@@ -1801,6 +1802,7 @@ function renderList(){
 
 // ── 결재함 ──
 async function checkApprovalBadge(){
+  await ensureSiteId();
   if(!siteId||!user) return;
   try {
     const data = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_APPROVALS}/items?$expand=fields&$filter=fields/Status eq '대기'&$top=999`);
@@ -1812,6 +1814,7 @@ async function checkApprovalBadge(){
 }
 async function loadApprovalQueue(){
   const tbody = document.getElementById('appr-body');
+  await ensureSiteId();
   if(!siteId){ tbody.innerHTML='<tr><td colspan="11" class="list-empty">SharePoint 사이트 접근 권한이 없습니다.</td></tr>'; return; }
   tbody.innerHTML = '<tr><td colspan="11" class="list-empty">불러오는 중...</td></tr>';
   try {
@@ -2108,6 +2111,7 @@ function closeDetailModal(){ document.getElementById('detail-modal').classList.r
 // ── 관리자 ──
 async function loadAdminList(){
   const tbody = document.getElementById('admin-body');
+  await ensureSiteId();
   if(!siteId){ tbody.innerHTML='<tr><td colspan="10" class="list-empty">SharePoint 사이트 접근 권한이 없습니다.</td></tr>'; return; }
   tbody.innerHTML = '<tr><td colspan="10" class="list-empty">불러오는 중...</td></tr>';
   try {
