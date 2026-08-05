@@ -865,7 +865,7 @@ async function boot(account) {
   document.getElementById('app-header').style.display='flex';
   document.getElementById('user-name').textContent=(account.name||account.username)+' ('+account.username+')';
   document.getElementById('v-requester').value = koreanName(account.name||account.username);
-  document.getElementById('v-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('v-date').value = new Date(new Date().getTime()+9*3600*1000).toISOString().slice(0,10);
 
   if(!goodsLines.length){ addGoodsLine(); }
   if(!accLines.length){ addAccLine(); }
@@ -1988,7 +1988,7 @@ async function openDetail(spId, fromTab){
     <div class="det-row"><div class="det-lbl">Purchase Category</div><div class="det-val">${v.PurchaseCategory||'-'}</div></div>
     <div class="det-row"><div class="det-lbl">Requester</div><div class="det-val">${v.RequesterEmail||'-'}</div></div>
     <div class="det-row"><div class="det-lbl">Department / Cost Center</div><div class="det-val">${v.Department||'-'} / ${v.CostCenter||'-'}</div></div>
-    <div class="det-row"><div class="det-lbl">제출일</div><div class="det-val">${(v.SubmittedDate||'').slice(0,10)||'-'}</div></div>
+    <div class="det-row"><div class="det-lbl">제출일</div><div class="det-val">${v.SubmittedDate ? new Date(new Date(v.SubmittedDate).getTime()+9*3600*1000).toISOString().slice(0,10) : '-'}</div></div>
     ${(v.Currency && v.Currency!=='KRW') ? `<div class="det-row"><div class="det-lbl">Currency / Exchange Rate</div><div class="det-val">${v.Currency} / ${v.ExchangeRate||'-'}</div></div>` : ''}
     <div class="det-row"><div class="det-lbl">상태</div><div class="det-val"><span class="badge-${(v.Status||'').replace(/[()]/g,'')}">${v.Status||'-'}</span></div></div>
 
@@ -2151,13 +2151,13 @@ async function exportAdminExcel(){
   const rows = adminListCache.map(v=>({
     'PR ID': v.Title, '신청자': v.RequesterName, '이메일': v.RequesterEmail,
     'Category': v.PurchaseCategory, '부서': v.Department, 'Cost Center': v.CostCenter,
-    '제출일': (v.SubmittedDate||'').slice(0,10), '금액(KRW)': Math.round(v.TotalKRW||0),
+    '제출일': v.SubmittedDate ? new Date(new Date(v.SubmittedDate).getTime()+9*3600*1000).toISOString().slice(0,10) : '', '금액(KRW)': Math.round(v.TotalKRW||0),
     'Vendor': v.VendorName, '상태': v.Status, '진행': (v.CurrentStep||0)+'/'+(v.TotalSteps||0)
   }));
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'CTR_PR');
-  XLSX.writeFile(wb, 'CTR_PR_전체목록_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  XLSX.writeFile(wb, 'CTR_PR_전체목록_'+new Date(new Date().getTime()+9*3600*1000).toISOString().slice(0,10)+'.xlsx');
 }
 
 // ── 공식 PDF 양식 ──
