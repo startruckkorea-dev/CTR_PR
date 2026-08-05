@@ -1769,9 +1769,9 @@ function _amountBreakdown(v){
 }
 function _appliedDateTime(v){
   if(!v.SubmittedDate) return '-';
-  const d = new Date(v.SubmittedDate);
+  const d = new Date(new Date(v.SubmittedDate).getTime()+9*3600*1000);
   const p = n => String(n).padStart(2,'0');
-  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
 }
 function renderList(){
   const st = document.getElementById('f-status').value;
@@ -2170,8 +2170,8 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
   const roleCols=[['TL','Team Leader'],['DH','Dept. Head'],['CEO','CEO'],['RD','RD'],['BC','Budget Ctr'],['CM','Ctr Head'],['CFO','CFO']];
   const rules = APPROVAL_RULES.PR;
   const NA='<span style="display:inline-block;background:#e1dfdd;color:#484644;font-size:8.5px;font-weight:800;padding:2px 7px;border-radius:3px;letter-spacing:.3px">NOT REQUIRED</span>';
-  const fmtDT = s => { if(!s) return ''; const d=new Date(s); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; };
-  const fmtApprDT = s => { if(!s) return ''; const d=new Date(s); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+  const fmtDT = s => { if(!s) return ''; const d=new Date(new Date(s).getTime()+9*3600*1000); const p=n=>String(n).padStart(2,'0'); return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())}`; };
+  const fmtApprDT = s => { if(!s) return ''; const d=new Date(new Date(s).getTime()+9*3600*1000); const p=n=>String(n).padStart(2,'0'); return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`; };
   const requesterKoName = koreanName(v.RequesterName);
 
   const goodsRows = (goods||[]).map(g=>`<tr>
