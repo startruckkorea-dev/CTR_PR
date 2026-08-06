@@ -725,9 +725,12 @@ async function loadEmployees(){
   }catch(e){ console.warn('직원 데이터 로드 실패:', e.message); }
 }
 
-// PR 결재 매트릭스 (F&C Controlling PR 양식 기준: Team Leader/Dept Head는 소액, CEO/RD/CFO는 고액 에스컬레이션, Budget Controller/Controlling Manager는 항상 필수)
+// PR 결재 매트릭스 (F&C Controlling PR 양식 기준: Team Leader/Dept Head는 소액, RD/CFO는 고액 에스컬레이션, Budget Controller/Controlling Manager는 항상 필수)
+// 2026-08-06: CEO 결재 단계 폐지 (SCC/GW/ACC Voucher와 동일 조치). rule='-'이면 needed()가 false를 반환해
+// 결재라인에 절대 포함되지 않음. 20,000,000 이상 건은 RD가 그대로 승계하므로 승인 권한 공백 없음.
+// CEO 키 자체는 공식 PR 양식의 CEO 칸 및 폐지 이전 신청건의 결재이력 표시를 위해 남겨둠.
 const APPROVAL_RULES = {
-  PR: { TL:'필수', DH:'필수', CEO:'>= 20,000,000', RD:'>= 20,000,000', BC:'필수', CM:'필수', CFO:'>= 20,000,000' }
+  PR: { TL:'필수', DH:'필수', CEO:'-', RD:'>= 20,000,000', BC:'필수', CM:'필수', CFO:'>= 20,000,000' }
 };
 
 // ── System Config (system_config_final.xlsx) ──
