@@ -864,6 +864,7 @@ async function apiAll(path) {
 }
 // SharePoint 리스트 $filter 조회가 가끔 "General exception while processing" 등으로 일시적으로 실패하는 경우가 있어
 // 결재 이력 조회처럼 중요한 곳에는 짧은 대기 후 재시도하는 래퍼를 사용
+// [보존] SharePoint 조회 재시도 래퍼. 현재 호출부는 없지만 의도적으로 남겨 둔다. 결재 이력 조회가 일시 실패할 때 쓰려고 만든 안전장치이며, 지우면 그 의도까지 사라진다.
 async function apiAllRetry(path, retries=3){
   let lastErr;
   for(let i=0;i<retries;i++){
@@ -1372,12 +1373,6 @@ function selectCC(code){
 
 // ── Vendor 검색 모달 ──
 let _bpTimer;
-function openBpModal(){
-  document.getElementById('bp-modal').classList.add('open');
-  document.getElementById('bp-search-input').value='';
-  renderBpResults(bpData.slice(0,10));
-  setTimeout(()=>document.getElementById('bp-search-input').focus(),100);
-}
 function closeBpModal(){ document.getElementById('bp-modal').classList.remove('open'); }
 function searchBP(q){
   clearTimeout(_bpTimer);
@@ -1557,7 +1552,6 @@ function ctrPersonChange(role, order){
   _dynApproverState[role] = {dept:st.dept, team:st.team, email};
   renderApprovalPreview();
 }
-function onCategoryOrAmountChange(){ renderApprovalPreview(); }
 document.addEventListener('DOMContentLoaded', ()=>{
   const catEl = document.getElementById('v-category');
   if(catEl) catEl.addEventListener('change', renderApprovalPreview);
@@ -1782,15 +1776,6 @@ function _wdBtnList(spId, status){
   return `<button onclick="event.stopPropagation();confirmWithdraw('${spId}')" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 12px;font-size:.75rem;cursor:pointer;font-family:inherit;white-space:nowrap;">Withdraw</button>`;
 }
 // ── 목록용 공통 헬퍼: G/L Acc.No. / Cost Center 요약 표시, 신청일(날짜+시간) ──
-function _glCcSummary(v){
-  let accL = [];
-  try { accL = JSON.parse(v.AccountLinesJSON||'[]'); } catch(e){}
-  const lines = accL.filter(l=>!l.isVat && (l.gl || l.cctr));
-  if(!lines.length) return '-';
-  const first = lines[0];
-  const txt = `${first.gl||'-'} / ${first.cctr||'-'}`;
-  return lines.length>1 ? `${txt} 외 ${lines.length-1}건` : txt;
-}
 // ── 결재함/관리자 목록용: G/L Acc.No. / G/L Acc.Description / Cost Center를 개별 컬럼으로 분리 ──
 function _glCcParts(v){
   let accL = [];
