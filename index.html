@@ -1232,21 +1232,21 @@ function renderGoodsLines(){
   tb.innerHTML = goodsLines.map((l,i)=>`
     <tr>
       <td><input type="text" value="${escAttr(l.desc)}" placeholder="품목명을 입력하세요" oninput="goodsLines[${i}].desc=this.value"></td>
-      <td><input type="text" value="${l.qty}" style="text-align:center" oninput="goodsLines[${i}].qty=this.value;updateGoodsSubtotal(${i});calcGoodsTotal()"></td>
-      <td><input type="text" value="${l.amount?Number(l.amount).toLocaleString():''}" placeholder="0" style="text-align:right" oninput="fmtInput(this);goodsLines[${i}].amount=parseComma(this.value);updateGoodsSubtotal(${i});calcGoodsTotal()"></td>
+      <td><input type="text" inputmode="decimal" value="${escAttr(l.qty)}" style="text-align:center" oninput="qtyInput(this);goodsLines[${i}].qty=this.value;updateGoodsSubtotal(${i});calcGoodsTotal()"></td>
+      <td><input type="text" inputmode="decimal" value="${l.amount?fmtCurInput(l.amount,getSelectedCurrency()):''}" placeholder="${curDec(getSelectedCurrency())?'0.00':'0'}" style="text-align:right" oninput="fmtAmountInput(this,getSelectedCurrency());goodsLines[${i}].amount=parseComma(this.value);updateGoodsSubtotal(${i});calcGoodsTotal()"></td>
       <td id="goods-subtotal-${i}" style="text-align:right;color:#605e5c;font-size:.82rem">${_goodsLineSubtotalDisplay(l)}</td>
       <td><button class="btn-del" onclick="deleteGoodsLine(${i})">✕</button></td>
     </tr>`).join('');
   calcGoodsTotal();
 }
-function _goodsLineSubtotal(l){ return (parseFloat(l.amount)||0)*(parseFloat(l.qty)||1); }
+function _goodsLineSubtotal(l){ return goodsSubOf(l, getSelectedCurrency()); }
 function _goodsLineSubtotalDisplay(l){
-  const sub = _goodsLineSubtotal(l);
   const cur = getSelectedCurrency();
-  if(cur==='KRW') return sub.toLocaleString();
+  const sub = goodsSubOf(l, cur);
+  if(cur==='KRW') return fmtCur(sub, cur);
   const rate = getSelectedExRate();
   const krw = Math.round(sub*rate);
-  return `${sub.toLocaleString()} <span style="font-size:10px">${cur}</span><br><span style="font-size:10px;color:#a19f9d">(≈ ${krw.toLocaleString()} KRW)</span>`;
+  return `${fmtCur(sub, cur)} <span style="font-size:10px">${cur}</span><br><span style="font-size:10px;color:#a19f9d">(≈ ${krw.toLocaleString()} KRW)</span>`;
 }
 function updateGoodsSubtotal(i){
   const cell = document.getElementById('goods-subtotal-'+i);
@@ -1284,6 +1284,14 @@ function onCurrencyChange(source){
   }
   _syncCurrencyUI();
   renderExRateBanner();
+  // 자릿수가 바뀌므로 입력칸을 다시 그린다. KRW 는 정수라 외화에서 넘어오면 금액을 반올림해 둔다
+  // (소수가 숨은 채 남으면 2번 · 4번 일치 검사가 화면에 보이지 않는 차이로 어긋난다).
+  if(cur==='KRW'){
+    goodsLines.forEach(l=>{ l.amount = Math.round(parseFloat(l.amount)||0); });
+    accLines.forEach(l=>{ l.amount = Math.round(parseFloat(l.amount)||0); });
+  }
+  if(typeof renderGoodsLines==='function') renderGoodsLines();
+  if(typeof renderAccLines==='function') renderAccLines();
   calcGoodsTotal(); calcAccTotal();
 }
 function onExRateInput(source){
@@ -1349,13 +1357,13 @@ async function loadExchangeRates(){
 function calcGoodsTotal(){
   const cur = getSelectedCurrency();
   const rate = getSelectedExRate();
-  const total = goodsLines.reduce((s,l)=>s+(parseFloat(l.amount)||0)*(parseFloat(l.qty)||1),0);
+  const total = goodsTotalOf(goodsLines, cur);
   if(cur==='KRW'){
     document.getElementById('v-goods-total').dataset.raw = total;
-    document.getElementById('goods-total-display').textContent = total.toLocaleString();
+    document.getElementById('goods-total-display').textContent = fmtCur(total, cur);
   } else {
     const krw = Math.round(total*rate);
-    document.getElementById('goods-total-display').innerHTML = `${total.toLocaleString()} <span style="font-size:14px">${cur}</span> <span style="font-size:12px;font-weight:400;color:#605e5c">(≈ ${krw.toLocaleString()} KRW)</span>`;
+    document.getElementById('goods-total-display').innerHTML = `${fmtCur(total, cur)} <span style="font-size:14px">${cur}</span> <span style="font-size:12px;font-weight:400;color:#605e5c">(≈ ${krw.toLocaleString()} KRW)</span>`;
   }
   renderAllGoodsSubtotals();
   checkGoodsAccMatch();
@@ -1371,8 +1379,9 @@ function addAccLine(){
 }
 function deleteAccLine(i){ accLines.splice(i,1); renderAccLines(); }
 function addVatLine(){
-  const base = accLines.filter(l=>!l.isVat).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
-  const vat = Math.round(base*0.1);
+  const _c = getSelectedCurrency();
+  const base = sumAmt(accLines.filter(l=>!l.isVat), _c);
+  const vat = roundCur(base*0.1, _c);   // 외화는 소수 둘째 자리까지
   const existing = accLines.findIndex(l=>l.isVat);
   const vatLine = {itemDesc:'Total VAT', gl:VAT_GL.code, glName:VAT_GL.name, cctr:'', cctrName:'', amount:vat, isVat:true};
   if(existing>=0) accLines[existing]=vatLine; else accLines.push(vatLine);
@@ -1396,7 +1405,7 @@ function renderAccLines(){
           ${l.isVat?'':`<button class="btn-search" style="padding:5px 8px" onclick="openCcModal(${i})">🔍</button>`}
         </div>
       </td>
-      <td><input type="text" value="${l.amount?Number(l.amount).toLocaleString():''}" style="text-align:right" ${l.isVat?'':'oninput="fmtInput(this);accLines['+i+'].amount=parseComma(this.value);calcAccTotal()"'} ${l.isVat?'readonly':''}></td>
+      <td><input type="text" inputmode="decimal" value="${l.amount?fmtCurInput(l.amount,getSelectedCurrency()):''}" style="text-align:right" ${l.isVat?'':'oninput="fmtAmountInput(this,getSelectedCurrency());accLines['+i+'].amount=parseComma(this.value);calcAccTotal()"'} ${l.isVat?'readonly':''}></td>
       <td><button class="btn-del" onclick="deleteAccLine(${i})" title="${l.isVat?'VAT 라인 제거':'삭제'}">✕</button></td>
     </tr>`).join('');
   calcAccTotal();
@@ -1405,13 +1414,13 @@ function calcAccTotal(){
   const cur = getSelectedCurrency();
   const rate = getSelectedExRate();
   const hasVat = accLines.some(l=>l.isVat);
-  const totalIncl = accLines.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
-  const vatAmt = accLines.filter(l=>l.isVat).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
-  const totalExcl = totalIncl - vatAmt;
+  const totalIncl = sumAmt(accLines, cur);
+  const vatAmt = sumAmt(accLines.filter(l=>l.isVat), cur);
+  const totalExcl = roundCur(totalIncl - vatAmt, cur);
   const fmtDual = (amt) => {
-    if(cur==='KRW') return amt.toLocaleString();
+    if(cur==='KRW') return fmtCur(amt, cur);
     const krw = Math.round(amt*rate);
-    return `${amt.toLocaleString()} ${cur} <span style="font-size:11px;color:#605e5c">(≈ ${krw.toLocaleString()} KRW)</span>`;
+    return `${fmtCur(amt, cur)} ${cur} <span style="font-size:11px;color:#605e5c">(≈ ${krw.toLocaleString()} KRW)</span>`;
   };
   const inclGroup = document.getElementById('acc-total-incl-group');
   const exclLabel = document.getElementById('acc-total-excl-label');
@@ -1426,33 +1435,76 @@ function calcAccTotal(){
 }
 // ── 2.Description of Goods 합계 vs 4.Accounting Information 합계 일치 여부 검증 (ACC Voucher의 DR/CR 일치 검증과 동일한 개념) ──
 function checkGoodsAccMatch(){
-  const goodsTotal = goodsLines.reduce((s,l)=>s+(parseFloat(l.amount)||0)*(parseFloat(l.qty)||1),0);
-  const accIncl = accLines.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
-  const vatAmt = accLines.filter(l=>l.isVat).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
-  const accExcl = accIncl - vatAmt;
+  const cur = getSelectedCurrency();
+  const goodsTotal = goodsTotalOf(goodsLines, cur);
+  const accIncl = sumAmt(accLines, cur);
+  const vatAmt = sumAmt(accLines.filter(l=>l.isVat), cur);
+  const accExcl = roundCur(accIncl - vatAmt, cur);
   const banner = document.getElementById('acc-goods-match-banner');
   const totalField = document.getElementById('v-goods-total');
-  const cur = getSelectedCurrency();
   if(!goodsTotal || !accIncl){
     if(banner) banner.innerHTML = '<span style="color:#a19f9d">2번, 4번 항목의 Excl. VAT 금액이 동일한 경우 입력됩니다</span>';
     if(totalField){ totalField.value = '2번, 4번 항목의 Excl. VAT 금액이 동일한 경우 입력됩니다'; totalField.style.cssText='text-align:right;font-weight:400;font-size:11px;color:#a19f9d'; }
     return;
   }
-  const match = Math.abs(goodsTotal-accExcl) < 1;
+  const match = amtEqual(goodsTotal, accExcl, cur);
   if(match){
     if(banner) banner.innerHTML = '<span style="color:#107c10;font-weight:600">✓ 2. Description of Goods 합계와 일치합니다</span>';
     if(totalField){
       const rate = getSelectedExRate();
       const krwAmt = cur==='KRW' ? accExcl : Math.round(accExcl*rate);
-      totalField.value = cur==='KRW' ? krwAmt.toLocaleString()+' KRW' : krwAmt.toLocaleString()+' KRW  (＝ '+accExcl.toLocaleString()+' '+cur+')';
+      totalField.value = cur==='KRW' ? krwAmt.toLocaleString()+' KRW' : krwAmt.toLocaleString()+' KRW  (＝ '+fmtCur(accExcl,cur)+' '+cur+')';
       totalField.style.cssText='text-align:right;font-weight:700;font-size:13px;color:#0078d4';
     }
   } else {
-    if(banner) banner.innerHTML = '<span style="color:#a4262c;font-weight:600">✗ 2. Description of Goods(Excl. VAT) 합계와 일치하지 않습니다 (차이: '+Math.round(goodsTotal-accExcl).toLocaleString()+' '+cur+')</span>';
+    if(banner) banner.innerHTML = '<span style="color:#a4262c;font-weight:600">✗ 2. Description of Goods(Excl. VAT) 합계와 일치하지 않습니다 (차이: '+fmtCur(roundCur(goodsTotal-accExcl,cur),cur)+' '+cur+')</span>';
     if(totalField){ totalField.value = '금액 불일치 — 2번과 4번(Excl. VAT)의 합계를 맞춰주세요'; totalField.style.cssText='text-align:right;font-weight:500;font-size:11px;color:#a4262c'; }
   }
 }
 function fmtInput(el){ const raw=el.value.replace(/,/g,'').replace(/[^0-9.]/g,''); el.value = raw?Number(raw).toLocaleString():''; }
+/* ── 소수 처리(2026-09-22) ──────────────────────────────────────────────
+   Quantity 는 0.22 · 1.22 처럼 소수 둘째 자리까지, 외화(KRW 외) 금액은 0.22 · 123,123.11 처럼 소수 둘째 자리까지.
+   예전 fmtInput 은 칠 때마다 Number() 로 바꿔 콤마를 찍어 「0.」 의 점이 바로 지워졌다 — 외화 단가에 소수를 넣을 수 없었다.
+   계산은 줄마다 통화 자릿수로 반올림해 부동소수 오차(0.22×123123.11 = …0000001)가 합계에 쌓이지 않게 한다.
+   KRW 는 예전처럼 정수. */
+function curDec(cur){ return String(cur||'KRW').toUpperCase()==='KRW' ? 0 : 2; }
+function roundCur(n, cur){ const f=Math.pow(10, curDec(cur)); const x=Number(n)||0; return Math.round((x+(x>=0?1:-1)*Number.EPSILON)*f)/f; }
+/* 보여 주기 — KRW 는 정수, 외화는 항상 소수 둘째 자리(2.00 · 0.22 · 123,123.11) */
+function fmtCur(n, cur){ const d=curDec(cur); return (Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+/* 입력칸에 다시 넣을 값 — 쓸데없는 0 은 붙이지 않는다(2 · 0.22) */
+function fmtCurInput(n, cur){ return (Number(n)||0).toLocaleString('en-US',{maximumFractionDigits:curDec(cur)}); }
+function fmtQty(q){ const n=parseFloat(q); return (isNaN(n)||!n ? 1 : n).toLocaleString('en-US',{maximumFractionDigits:2}); }
+function qtyOf(l){ return parseFloat(l && l.qty) || 1; }                 // 비어 있으면 1(예전과 같다)
+function goodsSubOf(l, cur){ return roundCur((parseFloat(l && l.amount)||0) * qtyOf(l), cur); }
+function goodsTotalOf(lines, cur){ return roundCur((lines||[]).reduce((s,l)=>s+goodsSubOf(l, cur),0), cur); }
+function sumAmt(lines, cur){ return roundCur((lines||[]).reduce((s,l)=>s+(parseFloat(l && l.amount)||0),0), cur); }
+/* 2번 · 4번 합계 일치 — 통화의 가장 작은 단위보다 작은 차이만 같다고 본다.
+   예전에는 통화와 상관없이 「차이 < 1」 이라 EUR 에서는 1유로(≈1,600원) 차이도 일치로 통과했다. */
+function amtEqual(a, b, cur){ return Math.abs((Number(a)||0)-(Number(b)||0)) < (curDec(cur) ? 0.005 : 1); }
+/* 금액 입력 — 콤마를 찍되 소수점과 소수 자리는 치는 그대로 둔다(외화 둘째 자리까지, KRW 는 정수). */
+function fmtAmountInput(el, cur){
+  const dec = curDec(cur);
+  const raw = el.value.replace(/,/g,'').replace(/[^0-9.]/g,'');
+  const dot = raw.indexOf('.');
+  let ip = dot<0 ? raw : raw.slice(0,dot);
+  let fp = dot<0 ? null : raw.slice(dot+1).replace(/\./g,'');
+  ip = ip.replace(/^0+(?=\d)/,'');
+  if(!ip && (fp===null || !dec)){ el.value=''; return; }
+  const ipFmt = ip ? Number(ip).toLocaleString('en-US') : '0';
+  // KRW 는 정수 — 점을 친 뒤의 숫자는 버리고 점은 남겨 둔다. 점까지 지우면 뒤에 친 숫자가 정수 끝에 붙어
+  // 「1500.5」 가 15,005 가 됐다(예전 fmtInput 과 같은 문제). 남은 점은 금액에 영향이 없다(parseComma).
+  if(!dec){ el.value = dot<0 ? ipFmt : ipFmt+'.'; return; }
+  if(fp!==null) fp = fp.slice(0,dec);
+  el.value = fp===null ? ipFmt : ipFmt+'.'+fp;
+}
+/* 수량 입력 — 숫자와 점 하나, 소수 둘째 자리까지 */
+function qtyInput(el){
+  let raw = el.value.replace(/[^0-9.]/g,'');
+  const d = raw.indexOf('.');
+  if(d>=0) raw = raw.slice(0,d+1) + raw.slice(d+1).replace(/\./g,'').slice(0,2);
+  el.value = raw;
+}
+function escH(v){ return String(v==null?'':v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function parseComma(str){ return parseFloat((str||'').toString().replace(/,/g,''))||0; }
 function escAttr(s){ return (s==null?'':String(s)).replace(/"/g,'&quot;'); }
 // 계정 표시이름("이준순 스타트럭코리아 IT(Junsoon Lee)")에서 맨앞 한글 이름만 추출 (ACC Voucher와 동일 로직)
@@ -1548,8 +1600,8 @@ function needed(rule, amt){
   return true;
 }
 function totalAmountKRW(){
-  const raw = goodsLines.reduce((s,l)=>s+(parseFloat(l.amount)||0)*(parseFloat(l.qty)||1),0);
   const cur = getSelectedCurrency();
+  const raw = goodsTotalOf(goodsLines, cur);
   if(cur==='KRW') return raw;
   const rate = getSelectedExRate();
   return Math.round(raw*rate);
@@ -1732,11 +1784,12 @@ async function savePR(status){
   const amt = totalAmountKRW();
   if(status==='대기' && amt<=0){ showAlert('입력 확인', 'Description of Goods에 금액을 입력해주세요.', '⚠️'); return; }
   if(status==='대기'){
-    const goodsTotal = goodsLines.reduce((s,l)=>s+(parseFloat(l.amount)||0)*(parseFloat(l.qty)||1),0);
-    const accIncl = accLines.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
-    const accVatAmt = accLines.filter(l=>l.isVat).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
-    const accExcl = accIncl - accVatAmt;
-    if(Math.abs(goodsTotal-accExcl) >= 1){
+    const _cur = getSelectedCurrency();
+    const goodsTotal = goodsTotalOf(goodsLines, _cur);
+    const accIncl = sumAmt(accLines, _cur);
+    const accVatAmt = sumAmt(accLines.filter(l=>l.isVat), _cur);
+    const accExcl = roundCur(accIncl - accVatAmt, _cur);
+    if(!amtEqual(goodsTotal, accExcl, _cur)){
       showAlert('금액 불일치', '2. Description of Goods(Excl. VAT) 합계와 4. Accounting Information(Excl. VAT) 합계가 일치하지 않습니다.\n두 항목의 합계를 맞춰주세요.', '⚠️');
       return;
     }
@@ -1763,9 +1816,9 @@ async function savePR(status){
   if(document.getElementById('r-po').checked) remarks.push('PO Required');
   if(document.getElementById('r-gr').checked) remarks.push('GR Required');
 
-  const vatAmt = accLines.filter(l=>l.isVat).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
-  const accTotal = accLines.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
   const _cur = getSelectedCurrency();
+  const vatAmt = sumAmt(accLines.filter(l=>l.isVat), _cur);
+  const accTotal = sumAmt(accLines, _cur);
   const _rate = getSelectedExRate();
   const accTotalKRW = _cur==='KRW' ? accTotal : Math.round(accTotal*_rate);
 
@@ -1900,10 +1953,10 @@ function _glCcParts(v){
 function _amountBreakdown(v){
   let accL = [];
   try { accL = JSON.parse(v.AccountLinesJSON||'[]'); } catch(e){}
-  const vatOrig = accL.filter(l=>l.isVat).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
-  const totalOrig = accL.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
-  const exclOrig = totalOrig - vatOrig;
   const cur = v.Currency||'KRW';
+  const vatOrig = sumAmt(accL.filter(l=>l.isVat), cur);
+  const totalOrig = sumAmt(accL, cur);
+  const exclOrig = roundCur(totalOrig - vatOrig, cur);
   const rate = cur==='KRW' ? 1 : (parseFloat(v.ExchangeRate)||1);
   return { exclKRW: Math.round(exclOrig*rate), vatKRW: Math.round(vatOrig*rate) };
 }
@@ -2138,18 +2191,19 @@ async function openDetail(spId, fromTab){
     ${(()=>{
       const cur = v.Currency||'KRW';
       const rate = (cur!=='KRW' && v.ExchangeRate) ? parseFloat(v.ExchangeRate) : 1;
-      const origTotal = goods.reduce((s,g)=>s+(g.amount||0)*(g.qty||1),0);
+      const origTotal = goodsTotalOf(goods, cur);
       if(!goods.length) return '<div class="det-row"><div class="det-val">없음</div></div>';
       const rows = goods.map(g=>{
-        const sub = Math.round((g.amount||0)*(g.qty||1));
+        // 외화 단가를 정수로 반올림해 보여 1.59 EUR 가 「2」 로 보였다(09-22). 통화 자릿수 그대로 보인다.
+        const sub = goodsSubOf(g, cur);
         const krwNote = cur!=='KRW' ? `<br><span style="color:#a19f9d;font-size:.68rem">(≈ ${Math.round(sub*rate).toLocaleString()} KRW)</span>` : '';
-        return `<tr><td>${g.desc||'-'}</td><td style="text-align:center">${g.qty||1}</td><td style="text-align:right">${Math.round(g.amount||0).toLocaleString()}</td><td style="text-align:right">${sub.toLocaleString()} ${cur}${krwNote}</td></tr>`;
+        return `<tr><td>${escH(g.desc||'-')}</td><td style="text-align:center">${fmtQty(g.qty)}</td><td style="text-align:right">${fmtCur(g.amount, cur)}</td><td style="text-align:right">${fmtCur(sub, cur)} ${cur}${krwNote}</td></tr>`;
       }).join('');
       const totalKrwNote = cur!=='KRW' ? ` <span style="font-weight:400;color:#605e5c">(＝ ${Math.round(v.TotalAmount||0).toLocaleString()} KRW)</span>` : '';
       return `<div style="overflow-x:auto"><table class="det-table">
         <thead><tr><th>Description of Goods</th><th style="text-align:center">Quantity</th><th style="text-align:right">Unit Price</th><th style="text-align:right">Sub Total (Excl. VAT)</th></tr></thead>
         <tbody>${rows}</tbody>
-        <tfoot><tr><td colspan="3" style="text-align:right">TOTAL</td><td style="text-align:right">${origTotal.toLocaleString()} ${cur}${totalKrwNote}</td></tr></tfoot>
+        <tfoot><tr><td colspan="3" style="text-align:right">TOTAL</td><td style="text-align:right">${fmtCur(origTotal, cur)} ${cur}${totalKrwNote}</td></tr></tfoot>
       </table></div>`;
     })()}
 
@@ -2160,10 +2214,10 @@ async function openDetail(spId, fromTab){
       if(!accL.length) return '<div class="det-row"><div class="det-val">없음</div></div>';
       let totalKrw = 0;
       const rows = accL.map(l=>{
-        const amt = Math.round(l.amount||0);
-        const krwAmt = cur==='KRW' ? amt : Math.round(amt*rate);
+        // 반올림한 뒤 환율을 곱하면 1.59 EUR 가 2 × 환율로 계산돼 KRW 가 크게 틀렸다(09-22). 원래 금액에 곱한 뒤 반올림.
+        const krwAmt = cur==='KRW' ? Math.round(parseFloat(l.amount)||0) : Math.round((parseFloat(l.amount)||0)*rate);
         totalKrw += krwAmt;
-        return `<tr${l.isVat?' style="background:#fce4d6"':''}><td>${l.itemDesc||'-'}</td><td>${l.glName||'-'}</td><td>${l.gl||'-'}</td><td>${l.cctrName||l.cctr||'-'}</td><td style="text-align:right">${krwAmt.toLocaleString()}</td></tr>`;
+        return `<tr${l.isVat?' style="background:#fce4d6"':''}><td>${escH(l.itemDesc||'-')}</td><td>${escH(l.glName||'-')}</td><td>${escH(l.gl||'-')}</td><td>${escH(l.cctrName||l.cctr||'-')}</td><td style="text-align:right">${krwAmt.toLocaleString()}</td></tr>`;
       }).join('');
       return `<div style="overflow-x:auto"><table class="det-table">
         <thead><tr><th>Item Description</th><th>G/L Acc. Description</th><th>G/L Acc. No.</th><th>Cost Center</th><th style="text-align:right">Amount (KRW)</th></tr></thead>
@@ -2318,23 +2372,27 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
   const fmtApprDT = s => { if(!s) return ''; const d=new Date(new Date(s).getTime()+9*3600*1000); const p=n=>String(n).padStart(2,'0'); return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`; };
   const requesterKoName = koreanName(v.RequesterName);
 
+  // 통화 금액은 통화 자릿수로(외화 소수 둘째 자리), KRW 환산은 fmtK(정수) 그대로.
+  const _pc = v.Currency||'KRW';
+  const fmtC = n => fmtCur(n, _pc);
   const goodsRows = (goods||[]).map(g=>`<tr>
     <td style="${cellB};text-align:left">${esc(g.desc)}</td>
-    <td style="${cellB};text-align:right">${g.qty||1}</td>
-    <td style="${cellB};text-align:right">${fmtK((g.amount||0)*(g.qty||1))}</td>
+    <td style="${cellB};text-align:right">${fmtQty(g.qty)}</td>
+    <td style="${cellB};text-align:right">${fmtC(goodsSubOf(g, _pc))}</td>
   </tr>`).join('');
-  const goodsTotal = (goods||[]).reduce((s,g)=>s+(parseFloat(g.amount)||0)*(parseFloat(g.qty)||1),0);
+  const goodsTotal = goodsTotalOf(goods, _pc);
 
   const accRows = (accL||[]).map(l=>`<tr${l.isVat?' style="font-weight:700"':''}>
     <td style="${cellB}">${esc(l.itemDesc)}</td>
     <td style="${cellB}">${esc(l.glName)}</td>
     <td style="${cellB};text-align:center">${esc(l.gl)}</td>
     <td style="${cellB};text-align:center">${esc(l.cctrName||l.cctr)}</td>
-    <td style="${cellB};text-align:center">KRW</td>
-    <td style="${cellB};text-align:right">${fmtK(l.amount)}</td>
+    <td style="${cellB};text-align:center">${esc(_pc)}</td>
+    <td style="${cellB};text-align:right">${fmtC(l.amount)}</td>
   </tr>`).join('');
-  const accTotal = (accL||[]).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
-  const accVat = (accL||[]).filter(l=>l.isVat).reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
+  // 통화 칸이 늘 「KRW」 였는데 금액은 PR 통화라, EUR 2 가 「KRW 2」 로 인쇄됐다(09-22).
+  const accTotal = sumAmt(accL, _pc);
+  const accVat = sumAmt((accL||[]).filter(l=>l.isVat), _pc);
   const hasVatLine = (accL||[]).some(l=>l.isVat);
 
   const apprRow = roleCols.map(rc=>{
@@ -2369,7 +2427,7 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
       <colgroup><col style="width:52%"><col style="width:14%"><col style="width:34%"></colgroup>
       <tr><td style="${lblB};text-align:center">Description of Goods</td><td style="${lblB};text-align:center">Quantity</td><td style="${lblB};text-align:center">Amount</td></tr>
       ${goodsRows}
-      <tr><td colspan="2" style="${cellB};text-align:right;font-weight:700">TOTAL AMOUNT (Excl. VAT)</td><td style="${cellB};text-align:right;font-weight:700">${esc(v.Currency||'KRW')} ${fmtK(goodsTotal)}${(v.Currency&&v.Currency!=='KRW'&&v.ExchangeRate)?' (≈ '+fmtK(goodsTotal*v.ExchangeRate)+' KRW)':''}</td></tr>
+      <tr><td colspan="2" style="${cellB};text-align:right;font-weight:700">TOTAL AMOUNT (Excl. VAT)</td><td style="${cellB};text-align:right;font-weight:700">${esc(v.Currency||'KRW')} ${fmtC(goodsTotal)}${(v.Currency&&v.Currency!=='KRW'&&v.ExchangeRate)?' (≈ '+fmtK(goodsTotal*v.ExchangeRate)+' KRW)':''}</td></tr>
     </table>
     <div style="font-weight:700;font-size:11px;margin-top:8px;border:1px solid #000;padding:4px 6px;background:#f0f0f0">Requester</div>
     <table style="width:100%;border-collapse:collapse;border:1px solid #000;border-top:none;table-layout:fixed">
@@ -2398,8 +2456,8 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
       <colgroup><col style="width:20%"><col style="width:24%"><col style="width:12%"><col style="width:14%"><col style="width:10%"><col style="width:20%"></colgroup>
       <tr><td style="${lblB};text-align:center">Item Description</td><td style="${lblB};text-align:center">G/L Acc. Description</td><td style="${lblB};text-align:center">G/L Acc. No.</td><td style="${lblB};text-align:center">Cost Center</td><td style="${lblB};text-align:center">Currency</td><td style="${lblB};text-align:center">Amount</td></tr>
       ${accRows}
-      ${hasVatLine ? `<tr><td colspan="5" style="${cellB};text-align:right;font-weight:700">TOTAL (Incl. VAT)</td><td style="${cellB};text-align:right;font-weight:700">${fmtK(accTotal)}</td></tr>` : ''}
-      <tr><td colspan="5" style="${cellB};text-align:right;font-weight:700">${hasVatLine?'TOTAL (Excl. VAT)':'TOTAL'}</td><td style="${cellB};text-align:right;font-weight:700">${fmtK(accTotal-accVat)}</td></tr>
+      ${hasVatLine ? `<tr><td colspan="5" style="${cellB};text-align:right;font-weight:700">TOTAL (Incl. VAT)</td><td style="${cellB};text-align:right;font-weight:700">${fmtC(accTotal)}</td></tr>` : ''}
+      <tr><td colspan="5" style="${cellB};text-align:right;font-weight:700">${hasVatLine?'TOTAL (Excl. VAT)':'TOTAL'}</td><td style="${cellB};text-align:right;font-weight:700">${fmtC(roundCur(accTotal-accVat, _pc))}</td></tr>
     </table>
     <div style="font-weight:700;font-size:11px;margin-top:8px;border:1px solid #000;padding:4px 6px;background:#f0f0f0">Remarks</div>
     <div style="border:1px solid #000;border-top:none;padding:6px 8px;font-size:10.5px">${esc((v.Remarks||'').split(';').filter(Boolean).join(', ')||'-')}</div>
