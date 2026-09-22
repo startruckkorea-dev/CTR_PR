@@ -2024,7 +2024,9 @@ async function loadApprovalQueue(){
       getAllApprovalsCached(),
       apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items?$expand=fields&$top=999`)
     ]);
-    const reqMap = {}; reqData.value.forEach(r=>reqMap[r.id]=r.fields);
+    // 신청 번호(_spId)를 함께 담는다. 필드만 담으면 결재함에서 연 상세가 번호를 몰라 결재행 0건 →
+    // 결재 이력이 비고 승인 · 반려 단추가 안 나왔다(09-22 신고 — 일반 결재자가 CTR 결재함에서 열 때. 04ed337 부터).
+    const reqMap = {}; reqData.value.forEach(r=>reqMap[r.id]={...r.fields, _spId:r.id});
     // 지금 내가 실제로 처리할 수 있는(Status='대기') 건만 표시 — '대기(잠김)'인 이후 차수는 결재함에 노출하지 않음
     // 같은 PR에서 내가 여러 차수를 담당하도록 지정된 경우, 가장 먼저 처리해야 할 한 건만 남김(중복행 방지)
     const myPending = apprData.value.filter(it=>isMyAppr(it.fields.ApproverEmail) && it.fields.Status==='대기');
@@ -2156,6 +2158,8 @@ async function openDetail(spId, fromTab){
   let v = myListCache.find(x=>String(x._spId)===String(spId))
     || adminListCache.find(x=>String(x._spId)===String(spId))
     || (apprQueueCache.find(x=>String(x.RequestID)===String(spId))?._req);
+  // 어느 목록에서 왔든 신청 번호를 갖게 한다 — 결재 이력 · 승인 단추 · 첨부 · PDF 가 모두 이 번호로 찾는다.
+  if(v && (v._spId==null || v._spId==='')) v = { ...v, _spId: spId };
   if(!v){
     try { v = { ...(await api(`/sites/${siteId}/lists/${LIST_REQUESTS}/items/${spId}/fields`)), _spId: spId }; }
     catch(e){ showAlert('오류', '데이터를 불러오지 못했습니다: '+e.message, '⚠️'); return; }
