@@ -2378,7 +2378,9 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
   const fmtK = n => Math.round(n||0).toLocaleString('ko-KR');
   const cellB='border:1px solid #000;padding:4px 6px;font-size:10.5px';
   const lblB=cellB+';background:#f0f0f0;font-weight:600;white-space:nowrap';
-  const apprByRole={}; (apprList||[]).forEach(a=>{apprByRole[a.ApproverRole]=a;});
+  /* 역할은 꼬리를 뗀 본래 값으로 맞춘다. 대리 처리된 행은 aacPatchWith 가 ApproverRole 을
+     'CFO · 대리(이름 <메일>)' 로 바꾸므로, 날값으로 비교하면 그 단계가 비어 NOT REQUIRED 로 찍혔다(09-23). */
+  const apprByRole={}; (apprList||[]).forEach(a=>{apprByRole[aacRoleBase(a.ApproverRole)]=a;});
   // 2026-08-11: CEO 결재 단계는 2026-08-06자로 폐지되어 결재라인에 포함되지 않는다.
   // 양식 표에만 열이 남아 항상 NOT REQUIRED로 출력되고 있어, 실제 결재 구조와 맞도록 열 자체를 제거한다.
   const roleCols=[['TL','Team Leader'],['DH','Dept. Head'],['RD','RD'],['BC','Budget Ctr'],['CM','Ctr Head'],['CFO','CFO']];
@@ -2419,6 +2421,7 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
       val = `<div style="display:inline-block;border:1.1px solid ${rejected?'#a4262c':'#0078d4'};border-radius:4px;padding:2px 5px;line-height:1.35">
         <div style="font-size:8px;font-weight:700;color:${rejected?'#a4262c':'#0078d4'};white-space:nowrap">${rejected?'❌ 반려':'✅ 전자결재'}</div>
         <div style="font-size:7.5px;color:#333;white-space:nowrap">${esc(a.ApproverName||'')}</div>
+        ${(()=>{ const _d=_aacRoleParse(a.ApproverRole); return _d?`<div style="font-size:6.5px;color:#8a6116;white-space:nowrap">on behalf of ${esc(_d.name)}</div>`:''; })()}
         <div style="font-size:7px;color:#666;white-space:nowrap">${fmtApprDT(a.ApprovalDate)}</div>
       </div>`;
     } else if(a){ val = ''; }
