@@ -1512,6 +1512,9 @@ function qtyInput(el){
   if(d>=0) raw = raw.slice(0,d+1) + raw.slice(d+1).replace(/\./g,'').slice(0,2);
   el.value = raw;
 }
+/* 결재 처리 시각 — GW · IT 와 같은 형식(KST 「YYYY-MM-DD HH:mm」). 예전에는 저장만 하고 이력에 보이지 않았다(09-22). */
+function fmtApprTime(v){ if(!v) return ''; const d=new Date(new Date(v).getTime()+9*3600*1000); if(isNaN(d)) return ''; const p=n=>String(n).padStart(2,'0');
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`; }
 function escH(v){ return String(v==null?'':v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function parseComma(str){ return parseFloat((str||'').toString().replace(/,/g,''))||0; }
 function escAttr(s){ return (s==null?'':String(s)).replace(/"/g,'&quot;'); }
@@ -2296,7 +2299,8 @@ async function openDetail(spId, fromTab){
     document.getElementById('detail-appr-list').innerHTML = items.map(a=>{
       return `<div class="appr-item"><div>
         <div><b>${a.ApprovalOrder}차 결재자(${ROLE_LABELS[aacRoleBase(a.ApproverRole)]||aacRoleBase(a.ApproverRole)})</b>${aacRolePill(a.ApproverRole, a.Status)}</div>
-        <div style="font-size:.72rem;color:#a19f9d">${a.ApproverName||'-'} · ${a.ApproverEmail||''}</div>
+        <div style="font-size:.72rem;color:#605e5c">${escH(a.ApproverName||'-')} · ${escH(a.ApproverEmail||'')}</div>
+        ${a.ApprovalDate?`<div style="font-size:.72rem;color:#a19f9d;margin-top:1px" data-appr-date>${fmtApprTime(a.ApprovalDate)}</div>`:''}
         ${a.Comment?`<div style="font-size:.72rem;background:#fff;border:1px solid #edebe9;border-radius:4px;padding:2px 6px;display:inline-block;margin-top:2px">💬 ${safeText(a.Comment)}</div>`:''}
       </div><div class="status-${(a.Status||'').replace(/[()]/g,'')}">${a.Status||'-'}</div></div>`;
     }).join('');
