@@ -616,8 +616,16 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
     <div class="modal-title" style="display:flex;align-items:center;justify-content:space-between;padding-right:34px">
       <span>신청 상세 내용</span>
       <div style="display:flex;gap:6px">
-        <button id="btn-export-detail-pdf" onclick="exportDetailScreenPdf()" title="화면에 보이는 상세 내용 그대로 PDF 출력" style="background:#fff;color:#0078d4;border:1px solid #0078d4;border-radius:8px;padding:6px 14px;font-size:.75rem;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">📄 상세화면 PDF</button>
-        <button id="btn-export-pdf" onclick="exportDetailPdf()" style="background:#0078d4;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:.75rem;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">📄 공식 양식 PDF</button>
+        <!-- ACC Voucher 와 같은 모양 — 이모지(📄) 대신 문서 아이콘(SVG) · 마우스 올림 효과(09-22 요청).
+             생성 중에는 원래 모양을 저장했다가 되돌리므로 아이콘도 함께 돌아온다. -->
+        <button id="btn-export-detail-pdf" onclick="exportDetailScreenPdf()" title="화면에 보이는 상세 내용 그대로 PDF 출력" style="display:inline-flex;background:#fff;color:#0078d4;border:1px solid #0078d4;border-radius:8px;padding:6px 14px;font-size:.75rem;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;align-items:center;gap:5px;transition:all .15s" onmouseover="this.style.background='#f0f6ff'" onmouseout="this.style.background='#fff'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          상세화면 PDF
+        </button>
+        <button id="btn-export-pdf" onclick="exportDetailPdf()" title="공식 PR 양식으로 PDF 출력" style="display:inline-flex;background:#0078d4;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:.75rem;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;align-items:center;gap:5px;transition:all .15s" onmouseover="this.style.background='#005a9e'" onmouseout="this.style.background='#0078d4'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          공식 양식 PDF
+        </button>
       </div>
     </div>
     <div id="detail-body"></div>
