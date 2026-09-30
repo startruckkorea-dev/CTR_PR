@@ -319,7 +319,7 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
     <button class="tab-btn active" id="tab-new-btn" onclick="switchTab('new')">PR 작성</button>
     <button class="tab-btn" id="tab-list-btn" onclick="switchTab('list')">내 신청서 목록</button>
     <button class="tab-btn" id="tab-appr-btn" onclick="switchTab('appr')">결재함 <span class="badge" id="appr-badge"></span></button>
-    <button class="tab-btn" id="tab-admin-btn" onclick="switchTab('admin')" style="display:none"><span style="color:#fff;background:#0078d4;border-radius:4px;padding:2px 10px;display:inline-block">관리자</span></button>
+    <button class="tab-btn" id="tab-admin-btn" onclick="switchTab('admin')"><span style="color:#fff;background:#0078d4;border-radius:4px;padding:2px 10px;display:inline-block">관리자</span></button>
   </div>
 
   <!-- ── PR 작성 ── -->
@@ -669,6 +669,26 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
 </div>
 
 <div id="dyn-loading"><div class="spinner"></div><span style="font-size:13px;color:#605e5c">처리 중...</span></div>
+
+<!-- 접근 권한 없음 — APS 다른 시스템(LTR-PC 등)과 같은 구성(09-30) -->
+<div id="no-auth-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(15,39,68,.45);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:14px;padding:40px 44px;max-width:380px;width:90%;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.18)">
+    <div style="width:52px;height:52px;background:#fef2f2;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 18px">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    </div>
+    <div style="font-size:1rem;font-weight:700;color:#0f2744;margin-bottom:8px">접근 권한 없음</div>
+    <div style="font-size:.83rem;color:#64748b;line-height:1.7;margin-bottom:20px">관리자 전용 메뉴입니다.<br>접근 권한이 없습니다.</div>
+    <div style="background:#f0f6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 16px;margin-bottom:24px;text-align:left">
+      <div style="font-size:.75rem;font-weight:700;color:#1d4ed8;margin-bottom:6px">접근 권한 신청 방법</div>
+      <div style="font-size:.78rem;color:#374151;line-height:1.8">
+        1. BU Admin에게 권한 요청<br>
+        2. BU Admin이 아래 시스템으로 티켓 생성<br>
+        <a href="https://itsm-ticket.startruckkorea.com/" target="_blank" style="color:#1d4ed8;font-weight:600;word-break:break-all">itsm-ticket.startruckkorea.com</a>
+      </div>
+    </div>
+    <button onclick="document.getElementById('no-auth-modal').style.display='none'" style="background:#0078d4;color:#fff;border:none;border-radius:8px;padding:10px 32px;font-size:.88rem;font-weight:600;cursor:pointer;font-family:inherit">확인</button>
+  </div>
+</div>
 
 <script>
 window.addEventListener('error', function(e){ console.error('[전역 에러]', e.message, e.filename, e.lineno+':'+e.colno); });
@@ -1162,7 +1182,7 @@ async function boot(account) {
     if(contactDisplay) setHdrContact('pr-contact-email', contactDisplay);
     const adminList = cfgEmails(cfg, ['CTR_PR_ADMIN_1','ADMIN_SP']);
     if(adminList.length) ADMIN_EMAILS.splice(0, ADMIN_EMAILS.length, ...adminList);
-    if(isMe2(ADMIN_EMAILS)) document.getElementById('tab-admin-btn').style.display='';
+    // 관리자 탭은 누구에게나 보인다(09-30 · APS 다른 시스템과 같이) — 권한이 없으면 switchTab 이 안내를 띄우고 이력을 남긴다
     _configLoaded = true;
     renderApprovalPreview();
   }).catch(()=>{ _configLoaded = true; });
@@ -1927,7 +1947,80 @@ async function savePR(status){
 
 // ── Tabs ──
 let myListCache = [], apprQueueCache = [], adminListCache = [];
+
+// ══ 감사 로깅(09-30) — STK-DB "Logging_data/{시스템}/{날짜}/" 에 행위마다 JSON 한 개. IT-Ticket 과 같은 규칙. fire-and-forget: 실패해도 원 기능에 영향 없음 ══
+let _logDriveId = null;
+async function _getLogDriveId() {
+  if (_logDriveId) return _logDriveId;
+  try {
+    if (!siteId) { const _s = await api('/sites/' + SITE_PATH_DB); siteId = _s.id; }
+    const drivesRes = await api('/sites/' + siteId + '/drives');
+    let docDrive = (drivesRes.value || []).find(d => ['Documents','문서','Shared Documents'].includes(d.name));
+    if (!docDrive && drivesRes.value && drivesRes.value.length) docDrive = drivesRes.value[0];
+    _logDriveId = docDrive ? docDrive.id : null;
+  } catch(e) { console.warn('[Log] drive 조회 실패:', e.message); }
+  return _logDriveId;
+}
+const _ensuredLogFolders = new Set();
+async function _ensureLogFolder(driveId, folderPath, t) {
+  if (_ensuredLogFolders.has(folderPath)) return true;
+  const parts = folderPath.split('/').filter(Boolean);
+  let cur = '';
+  try {
+    for (const part of parts) {
+      const nextPath = cur ? cur + '/' + part : part;
+      const checkRes = await fetch(GRAPH + '/drives/' + driveId + '/root:/' + nextPath, { headers: { Authorization: 'Bearer ' + t } });
+      if (checkRes.ok) { cur = nextPath; continue; }
+      const parentUrl = cur ? GRAPH + '/drives/' + driveId + '/root:/' + cur + ':/children' : GRAPH + '/drives/' + driveId + '/root/children';
+      const res = await fetch(parentUrl, { method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: part, folder: {}, '@microsoft.graph.conflictBehavior': 'fail' }) });
+      if (!res.ok && res.status !== 409) { console.warn('[Log] 폴더 생성 실패:', nextPath, res.status); return false; }
+      cur = nextPath;
+    }
+    _ensuredLogFolders.add(folderPath);
+    return true;
+  } catch(e) { console.warn('[Log] 폴더 생성 오류:', e.message); return false; }
+}
+function logAction(systemName, action, detail) {
+  (async () => {
+    try {
+      const driveId = await _getLogDriveId();
+      if (!driveId) return;
+      const t = await token();
+      const now = new Date(new Date().getTime() + 9*3600*1000);   // KST
+      const p = n => String(n).padStart(2,'0');
+      const dateStr = now.getUTCFullYear() + '-' + p(now.getUTCMonth()+1) + '-' + p(now.getUTCDate());
+      const timeStr = p(now.getUTCHours()) + p(now.getUTCMinutes()) + p(now.getUTCSeconds());
+      const rawUser = (user && (user.email || user.username)) || 'unknown';
+      const userTag = rawUser.split('@')[0].replace(/[^a-zA-Z0-9._-]/g, '_');
+      const rand = Math.random().toString(36).slice(2, 6);
+      const folderPath = 'Logging_data/' + systemName + '/' + dateStr;
+      if (!(await _ensureLogFolder(driveId, folderPath, t))) return;
+      await fetch(GRAPH + '/drives/' + driveId + '/root:/' + folderPath + '/' + timeStr + '_' + userTag + '_' + rand + '.json:/content', {
+        method: 'PUT', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timestampKST: dateStr + ' ' + p(now.getUTCHours()) + ':' + p(now.getUTCMinutes()) + ':' + p(now.getUTCSeconds()), user: rawUser, system: systemName, action, detail: detail || {} })
+      });
+    } catch(e) { console.warn('[Log] 기록 실패(무시됨):', e.message); }
+  })();
+}
+let _adminWaitTicks = 0;
 function switchTab(tab){
+  if(tab==='admin'){   // 관리자 탭 — 설정을 다 읽은 뒤 명단으로 판정한다. 권한이 없으면 안내를 띄우고, 어느 쪽이든 이력을 남긴다(09-30)
+    if(!_configLoaded){
+      const btn=document.getElementById('tab-admin-btn');
+      if(++_adminWaitTicks>13){ _adminWaitTicks=0; if(btn){btn.style.opacity='';btn.style.pointerEvents='';btn.title='';} showAlert('설정 파일을 아직 불러오는 중입니다','잠시 뒤 「관리자」 를 다시 눌러 주세요.','⚠️'); return; }
+      if(btn){btn.style.opacity='0.6';btn.style.pointerEvents='none';btn.title='권한 확인 중...';}
+      setTimeout(()=>{ if(btn){btn.style.opacity='';btn.style.pointerEvents='';btn.title='';} switchTab('admin'); },1500);
+      return;
+    }
+    _adminWaitTicks=0;
+    if(!isMe2(ADMIN_EMAILS)){
+      logAction('CTR_PR', '관리자 탭 접근 차단', { reason: '관리자 명단에 없음', admins: ADMIN_EMAILS.length });
+      const m=document.getElementById('no-auth-modal'); if(m) m.style.display='flex';
+      return;
+    }
+    logAction('CTR_PR', '관리자 탭 열기', {});
+  }
   ['new','list','appr','admin'].forEach(t=>{
     document.getElementById('tab-'+t).style.display = t===tab?'':'none';
     const btn = document.getElementById('tab-'+t+'-btn');
