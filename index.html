@@ -305,6 +305,8 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
 .appr-info input[readonly]{background:#f3f2f1;color:#605e5c}
 .appr-block .appr-title::before,.appr-title::before{content:none!important;display:none!important}
 @media (max-width:640px){.appr-select-row{grid-template-columns:1fr}.appr-info{grid-template-columns:1fr}}
+.appr-tag.flex{color:#0b5fa5;background:#e1f0ff}
+.flex-note{font-size:11px;color:#a4262c;background:#fdf0f1;border:1px solid #f1c0c4;border-radius:6px;padding:6px 10px;margin:0 0 8px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -931,7 +933,7 @@ async function loadEmployees(){
     const buf=await res.arrayBuffer();
     const wb=XLSX.read(buf,{type:'array'});
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-    employeeData=rows.map(r=>({dept:r['Department']||'',team:r['Team']||'',name:r['EngName']||'',email:(r['EMail']||r['email']||'')})).filter(r=>r.email&&r.name);
+    employeeData=rows.map(r=>({dept:r['Department']||'',team:r['Team']||'',name:r['EngName']||'',email:(r['EMail']||r['email']||''),boss:String(r['Boss']||'').trim(),boss2:String(r['Boss of Boss']||'').trim()})).filter(r=>r.email&&r.name);   // boss = G열 팀장 · boss2 = H열 부서장 (Flex 연동 결재자, 10-01)
     console.log('[employee_search] 로드 완료:', employeeData.length);
     renderApprovalPreview(); // 이미 그려진 드롭다운이 있으면 옵션 채워서 다시 그림
   }catch(e){ console.warn('직원 데이터 로드 실패:', e.message); }
@@ -1710,6 +1712,39 @@ function buildApprovers(){
   });
   return result;
 }
+
+/* ══ Flex 연동 결재자 (10-01) ══
+   직접 선택하던 Team Leader · Department Head 를 employee_search.xlsx(Flex 조직도)에서 자동으로 정한다 — G열 Boss = 팀장, H열 Boss of Boss = 부서장.
+   설정 파일(CTR_PR_*)로 정하는 자동 지정 결재자(RD · BC · CM · CFO · CEO)는 그대로.
+   · 신청자(로그인 계정)를 EMail 열에서 찾고, Boss / Boss of Boss 의 이름(EngName)을 명부에서 다시 찾아 이메일을 얻는다.
+   · 부서장(H)이 '-' 이면(본부장 본인 신청) G(직속 상사 = 대표)를 부서장으로 본다. 같은 사람이 두 단계에 올 수 있다.
+   · 신청자가 명부에 없거나 상사 이름을 못 찾으면 예전처럼 직접 선택 드롭다운을 열어 두고 안내를 띄운다(차단하지 않음) — Logging_data 에 남긴다.
+   입력칸(dyn-TL/DH-name · -email)과 buildApprovers 는 그대로 — 값만 자동으로 채운 읽기 전용 블록으로 그린다. */
+function flexNorm(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
+function flexByName(name){ const k=flexNorm(name); if(!k||k==='-') return null; return employeeData.find(e=>flexNorm(e.name)===k)||null; }
+function flexResolve(){
+  const me=[user&&user.email, user&&user.username].map(flexNorm).filter(Boolean);
+  const rec=employeeData.find(e=>me.includes(flexNorm(e.email)))||null;
+  if(!rec) return {rec:null, tl:null, dh:null};
+  return {rec, tl:flexByName(rec.boss), dh:flexByName(rec.boss2)||flexByName(rec.boss)};
+}
+let _flexNote = {};   // role(tl/dh) → 직접 선택으로 열린 이유(안내 문구)
+function flexForRender(approvers){
+  _flexNote = {};
+  if(!employeeData.length || !user) return {tl:null, dh:null};   // 명부가 아직 없으면 예전 드롭다운(로딩중) 그대로
+  const r = flexResolve(); const why=[];
+  [['TL','tl','팀장(Boss)'],['DH','dh','부서장(Boss of Boss)']].forEach(([role,key,what])=>{
+    if(!approvers.some(a=>a.role===role) || r[key]) return;
+    _flexNote[key] = r.rec
+      ? '⚠ Flex 명부(employee_search)에서 '+what+' 「'+((key==='tl'?r.rec.boss:(r.rec.boss2||r.rec.boss))||'(빈칸)')+'」 을(를) 찾지 못해 직접 선택합니다 — IT팀(stk_it@hyosung.com)에 알려주세요.'
+      : '⚠ 신청자 계정이 Flex 명부(employee_search)에 없어 결재자를 직접 선택합니다 — IT팀(stk_it@hyosung.com)에 알려주세요.';
+    why.push(role+': '+(r.rec ? (key==='tl' ? 'Boss 못 찾음('+(r.rec.boss||'')+')' : 'Boss of Boss 못 찾음('+(r.rec.boss2||'')+'/'+(r.rec.boss||'')+')') : '명부에 없음'));
+  });
+  if(why.length && !flexForRender._logged){ flexForRender._logged=true; try{ logAction('CTR_PR','결재자 Flex 연동 실패',{ user:(user.email||user.username||''), reason: why.join(' · ') }); }catch(e){} }
+  return {tl:r.tl, dh:r.dh};
+}
+function flexNoteHtml(key){ return _flexNote[key] ? '<div class="flex-note">'+escAttr(_flexNote[key])+'</div>' : ''; }
+
 function renderApprovalPreview(){
   const approvers = buildApprovers();
   const strip = document.getElementById('appr-line-preview');
@@ -1731,6 +1766,7 @@ function renderApprovalPreview(){
     ).join('')+
     `</div>`;
 
+  const _flex = flexForRender(approvers);   // Flex 연동 결재자(TL · DH) 판정 — 못 찾은 역할은 이력에 한 번 남긴다
   el.innerHTML = approvers.map(a=>{
     const fixedTag = a.fixed
       ? `<span class="appr-tag auto">자동 지정</span>`
@@ -1743,7 +1779,17 @@ function renderApprovalPreview(){
           <input type="email" value="${escAttr(a.email)}" readonly placeholder="이메일 (config 미설정 시 비어있음)">
         </div></div>`;
     }
-    // Team Leader/Department Head 등 직접 선택 대상 — GW와 동일하게 employee_search.xlsx 기반 부서/팀/직원 드롭다운 제공
+    // Team Leader(= G열 Boss) / Department Head(= H열 Boss of Boss) — employee_search.xlsx(Flex 조직도)에서 자동으로 정한다(10-01).
+    // 신청자가 명부에 없거나 상사 이름을 못 찾으면 예전처럼 부서/팀/직원 드롭다운을 연다(아래).
+    const fx = _flex[a.role === 'TL' ? 'tl' : 'dh'];
+    if (fx) {
+      return `<div class="appr-block appr-fixed appr-flex">
+        <div class="appr-block-title">${a.order}차 결재자 <span class="req-mark">*</span><span class="appr-tag flex">Flex 연동</span> <span class="hint">— ${a.label}</span></div>
+        <div class="appr-info">
+          <input type="text"  id="dyn-${a.role}-name"  readonly placeholder="이름" value="${escAttr(fx.name)}">
+          <input type="email" id="dyn-${a.role}-email" readonly placeholder="이메일" value="${escAttr(fx.email)}">
+        </div></div>`;
+    }
     const st = _dynApproverState[a.role] || {dept:'', team:'', email:''};
     const depts = [...new Set(employeeData.map(e=>e.dept))].sort();
     const teams = st.dept ? [...new Set(employeeData.filter(e=>e.dept===st.dept).map(e=>e.team))].sort() : [];
@@ -1751,6 +1797,7 @@ function renderApprovalPreview(){
     const picked = st.email ? employeeData.find(e=>e.email===st.email) : null;
     return `<div class="appr-block">
       <div class="appr-block-title">${a.order}차 결재자 <span class="req-mark">*</span>${fixedTag} <span class="hint">— ${a.label}</span></div>
+      ${flexNoteHtml(a.role === 'TL' ? 'tl' : 'dh')}
       <div class="appr-select-row">
         <select id="ctr${a.order}-dept" onchange="ctrDeptChange('${a.role}',${a.order})" ${employeeData.length?'':'disabled'}>
           <option value="">부서${employeeData.length?'':' (로딩중...)'}</option>
