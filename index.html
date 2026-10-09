@@ -467,10 +467,16 @@ html, * { scrollbar-width: thin; scrollbar-color: #CBD5E1 transparent; }
 ::-webkit-scrollbar-thumb:hover { background: #94A3B8; background-clip: padding-box; }
 </style>
 <style id="aps-mobile">
-/* APS 모바일(10-09 · aps-mobile) — 767px 이하 전용. 웹 화면 무변경 */
+/* APS 모바일(10-09 · aps-mobile · 10-10 2차 점검) — 767px 이하 전용. 웹 화면 무변경 */
 /* CTR_PR: 작성 탭 「기존 PR 불러오기」 줄(입력칸 220px)이 문서를 448px 로 밀던 것 · 4. Accounting 단추 두 개가 세로로 짓눌리던 것 · 상세 제목 「신청 상세 내용」 이 한 글자씩 세로로 꺾이던 것을 잡는다.
    상세 모달은 「상세화면 PDF」 가 html2canvas windowWidth 700 으로 다시 그리므로 상세 규칙은 699px 이하에만 둔다(PDF 결과 무변경). 「공식 양식 PDF」 는 클래스 없는 별도 HTML 이라 영향 없음. */
-@media (max-width: 767px) {
+@media screen and (max-width: 767px) {
+  /* ── 2차 방어 규칙(iPhone Safari · Galaxy): 글자 자동 확대 끔 · 입력칸이 부모보다 넓어지지 않게(CTR_PR 은 날짜 입력칸 없음) ── */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  input, select, textarea, button { max-width: 100%; box-sizing: border-box; }
+  #app .form-group > select, .appr-select-row select { height: 38px; min-height: 38px; }   /* iOS 기본 select 높이를 입력칸과 같게 — 모양은 그대로 */
+  .list-filters select, .list-filters input { height: 38px; min-height: 38px; }   /* 목록 · 관리자 필터: 선택 · 검색칸 같은 높이 */
+
   /* ── 바탕 · 카드 ── */
   #app { padding: 12px 12px 32px; }
   #app .card { padding: 16px 14px; margin-bottom: 12px; }
@@ -501,7 +507,7 @@ html, * { scrollbar-width: thin; scrollbar-color: #CBD5E1 transparent; }
   #tab-new .card-title[style*="space-between"] > span:first-child { flex: 1 1 100%; }
   #tab-new .card-title[style*="space-between"] > div { flex: 1 1 100%; flex-wrap: wrap; row-gap: 6px; }
   #tab-new .card-title[style*="space-between"] > div > span:first-child { flex-basis: 100%; }
-  #load-pr-id { flex: 1 1 150px; width: auto !important; min-width: 0; }
+  #load-pr-id { flex: 1 1 150px; width: auto !important; min-width: 0; height: 38px; }   /* 2차: 옆 「불러오기」 단추(38px)와 같은 높이(30px 이던 것) */
   #tab-new .card-title[style*="space-between"] > div > button { min-height: 38px; padding: 6px 14px !important; }
 
   /* ── 폼 — 1열 · 라벨 위 · 입력 아래 ── */
@@ -517,6 +523,11 @@ html, * { scrollbar-width: thin; scrollbar-color: #CBD5E1 transparent; }
   .lines-header > div > .btn-add { flex: 1 1 0; min-height: 38px; padding: 6px 8px; }
   .lines-scroll { -webkit-overflow-scrolling: touch; }
   table.lines { min-width: 760px; }
+  /* 2차: 4. 회계 라인 — 입력 16px 에서 G/L No.(62030100) · 금액(1,234,567,890) · Cost Center 코드가 잘리던 것 → 표를 넓히고 칸 비율 조정(표 상자 안에서만 가로 스크롤) */
+  #acc-table { min-width: 900px; }
+  #acc-table th:nth-child(1), #acc-table th:nth-child(2) { width: 20% !important; }
+  #acc-table th:nth-child(4) { width: 18% !important; }
+  #v-goods-total { text-overflow: ellipsis; }   /* 읽기 전용 합계 칸에 긴 「금액 불일치 …」 문구가 들어오면 끝을 … 로(같은 문구는 4번 아래에도 표시됨) */
   table.lines input, table.lines select { padding: 6px 8px; }
   .totals-bar { justify-content: center; padding: 12px !important; row-gap: 6px; }
   #acc-total-incl-group { flex-wrap: wrap; justify-content: center; }
@@ -569,6 +580,7 @@ html, * { scrollbar-width: thin; scrollbar-color: #CBD5E1 transparent; }
 
   /* ── 그 밖의 팝업 — 좌우 10px 여백 · 화면 안 · 단추 반씩 ── */
   .modal-overlay { padding: 10px; }
+  .modal-overlay .modal-head .modal-close { position: static; flex: none; width: 36px; height: 36px; margin: -8px -10px -8px 8px; color: #fff; font-size: 1.1rem; }   /* 2차: G/L · Cost Center 검색 팝업의 ✕ 가 팝업 밖 화면 오른쪽 위(헤더 띠 위)에 떠 있던 것 → 파란 제목 줄 안 오른쪽 */
   .modal-overlay .modal { max-height: 90vh; max-height: 90dvh; }
   .search-bar input { min-width: 0; }
   #appr-confirm-modal > div, #no-auth-modal > div { width: calc(100% - 20px) !important; max-height: 90vh; max-height: 90dvh; overflow-y: auto; }
