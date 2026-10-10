@@ -192,6 +192,10 @@ table.lines input:focus, table.lines select:focus { outline: none; border-color:
 
 .modal{background:#fff;border-radius:8px;box-shadow:0 16px 48px rgba(0,0,0,.22);width:100%;max-width:520px;max-height:75vh;overflow-y:auto}
 .modal-head{padding:14px 18px;background:#0078d4;color:#fff;display:flex;justify-content:space-between;align-items:center;font-weight:600;border-radius:8px 8px 0 0}
+/* aps-web-fix CTR_PR(10-10) — G/L · Cost Center 검색 팝업의 ✕: .modal-close(위 상세 모달용 absolute)가 기준 상자 없이
+   화면 오른쪽 위(헤더 띠 위)에 떠 있던 것 → 파란 제목 줄 안 오른쪽, 흰 글자. 누르는 칸 32px, 음수 여백으로 제목 줄 높이(50px)는 그대로.
+   767px 이하는 aps-mobile 이 같은 배치(36px)를 맡는다. */
+@media screen and (min-width:768px){.modal-head .modal-close{position:static;flex:none;width:32px;height:32px;margin:-6px -8px -6px 8px;padding:0;color:#fff;font-size:1.1rem;line-height:1;border-radius:4px}.modal-head .modal-close:hover{background:rgba(255,255,255,.16)}}
 .modal-body{padding:16px 18px}
 .search-bar{display:flex;gap:6px;margin-bottom:12px}
 .search-bar input{flex:1;border:1px solid #d2d0ce;border-radius:4px;padding:7px 10px;font-size:13px;font-family:inherit}
