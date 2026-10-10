@@ -3092,6 +3092,8 @@ async function exportAdminExcel(){
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'CTR_PR');
   XLSX.writeFile(wb, 'CTR_PR_전체목록_'+new Date(new Date().getTime()+9*3600*1000).toISOString().slice(0,10)+'.xlsx');
+  // 출력 기록(10-10) — 다른 APS 시스템의 「Excel 내보내기」 기록과 같은 action. 필터 없이 전체를 내보내므로 건수만. 비차단
+  try { logAction('CTR_PR', 'Excel 내보내기', { 건수: rows.length }); } catch (le) { console.warn('[Log] Excel 내보내기 기록 생략:', le && le.message); }
 }
 
 // ── 공식 PDF 양식 ──
@@ -3485,7 +3487,12 @@ async function exportDetailPdf(){
     const detailEl = document.getElementById('detail-body');
     if(detailEl){ if(btn) btn.innerHTML='⏳ 첨부파일 병합 중...'; await appendAttachmentPagesToDoc(mainDoc, dataUrlToUint8, makeHeaderBytes, detailEl, btn); }
     await downloadPdfDoc(mainDoc, (v.Title||'CTR_PR')+'_공식양식.pdf');
-  } catch(e){ showAlert('PDF 생성 실패', e.message, '⚠️'); }
+    // 출력 기록(10-10 pdflog) — 파일을 내려보낸 뒤 Logging_data 에 남긴다(관리자 탭과 같은 logAction).
+    // logAction 은 기다리지 않는 비차단 호출이고 안에서 오류를 삼킨다 — 기록이 실패 · 지연돼도 PDF 는 그대로 나간다.
+    try { logAction('CTR_PR', '공식 PDF 출력', { 신청: v.Title || '', id: v._spId || '', 상태: v.Status || '', 종류: '공식 양식 PDF', 파일: (v.Title||'CTR_PR')+'_공식양식.pdf', 페이지: mainDoc.getPageCount() }); } catch (le) { console.warn('[Log] 공식 PDF 출력 기록 생략:', le && le.message); }
+  } catch(e){
+    try { logAction('CTR_PR', '공식 PDF 출력 실패', { 신청: v.Title || '', id: v._spId || '', 상태: v.Status || '', 종류: '공식 양식 PDF', 오류: String((e && e.message) || e || '').slice(0, 200) }); } catch (le) { console.warn('[Log] 공식 PDF 출력 실패 기록 생략:', le && le.message); }
+    showAlert('PDF 생성 실패', e.message, '⚠️'); }
   finally { if(btn){ btn.innerHTML = btnOrig; btn.disabled=false; } }
 }
 
@@ -3507,7 +3514,11 @@ async function exportDetailScreenPdf(){
     if(btn) btn.innerHTML='⏳ 첨부파일 병합 중...';
     await appendAttachmentPagesToDoc(mainDoc, dataUrlToUint8, makeHeaderBytes, detailEl, btn);
     await downloadPdfDoc(mainDoc, (v.Title||'CTR_PR')+'_상세화면.pdf');
-  } catch(e){ showAlert('PDF 생성 실패', e.message, '⚠️'); }
+    // 출력 기록(10-10) — 위 「공식 양식 PDF」 와 같은 방식(비차단 · 실패해도 PDF 에 영향 없음)
+    try { logAction('CTR_PR', 'PDF 출력', { 신청: v.Title || '', id: v._spId || '', 상태: v.Status || '', 종류: '상세화면 PDF', 파일: (v.Title||'CTR_PR')+'_상세화면.pdf', 페이지: mainDoc.getPageCount() }); } catch (le) { console.warn('[Log] PDF 출력 기록 생략:', le && le.message); }
+  } catch(e){
+    try { logAction('CTR_PR', 'PDF 출력 실패', { 신청: v.Title || '', id: v._spId || '', 상태: v.Status || '', 종류: '상세화면 PDF', 오류: String((e && e.message) || e || '').slice(0, 200) }); } catch (le) { console.warn('[Log] PDF 출력 실패 기록 생략:', le && le.message); }
+    showAlert('PDF 생성 실패', e.message, '⚠️'); }
   finally { if(btn){ btn.innerHTML = btnOrig; btn.disabled=false; } }
 }
 
