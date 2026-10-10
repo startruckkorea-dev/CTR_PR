@@ -1785,6 +1785,7 @@ async function loadExchangeRates(){
     if(!use.length){ const past=[...new Set(all.filter(r=>r.date<today).map(r=>r.date))].sort(); const last=past[past.length-1]; if(last) use=all.filter(r=>r.date===last); }
     window._cachedExRates={};
     use.forEach(r=>{ window._cachedExRates[r.currency]=r.rate; });
+    window._exRateHist = all.filter(r=>r.rate>0);   // 날짜별 전체 — 상세의 「기준 환율 대비 차이」(지난 신청)용(10-10)
     console.log('[Exchange] Loaded:', Object.keys(window._cachedExRates).length);
     renderExRateBanner();
   }catch(e){ console.warn('환율 로드 실패:', e.message); }
@@ -1945,7 +1946,10 @@ function fmtApprTime(v){ if(!v) return ''; const d=new Date(new Date(v).getTime(
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`; }
 function escH(v){ return String(v==null?'':v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function parseComma(str){ return parseFloat((str||'').toString().replace(/,/g,''))||0; }
-function escAttr(s){ return (s==null?'':String(s)).replace(/"/g,'&quot;'); }
+// 10-10: 따옴표만 바꾸던 것을 escHtml 과 같게 — value 속성 · 안내 문구(flexNoteHtml) 어디에 넣어도 태그가 살아나지 않게(값은 그대로 보인다)
+function escAttr(s){ return escHtml(s); }
+// 목록 · 버튼 onclick 에 넣는 번호 — SharePoint 항목 id · RequestID 는 숫자다. 다른 글자가 섞여 와도 따옴표를 깨지 못하게 숫자 · 영문만 남긴다(10-10)
+function _idq(v){ return String(v==null?'':v).replace(/[^0-9A-Za-z_-]/g,''); }
 // 계정 표시이름("이준순 스타트럭코리아 IT(Junsoon Lee)")에서 맨앞 한글 이름만 추출 (ACC Voucher와 동일 로직)
 function koreanName(s){ const m=String(s||'').match(/^[가-힣]+/); return m ? m[0] : (s||'-'); }
 
@@ -2023,7 +2027,7 @@ function onFileSelect(e){
 function removeFile(i){ prFiles.splice(i,1); renderFileList(); }
 function renderFileList(){
   document.getElementById('file-list').innerHTML = prFiles.map((f,i)=>`
-    <div class="file-item"><span>📄 ${f.name} (${(f.size/1024).toFixed(0)}KB)</span><button onclick="removeFile(${i})">✕</button></div>`).join('');
+    <div class="file-item"><span>📄 ${escHtml(f.name)} (${(f.size/1024).toFixed(0)}KB)</span><button onclick="removeFile(${i})">✕</button></div>`).join('');
 }
 
 // ── 결재라인 구성 ──
@@ -2045,6 +2049,95 @@ function totalAmountKRW(){
   const rate = getSelectedExRate();
   return Math.round(raw*rate);
 }
+/* ══ 결재선 금액 기준 — 기준 환율(10-10) ══
+   환율 칸(2번 섹션 v-exrate-2)은 07-09(2cd78ba) ACC Voucher 와 같게 신청자가 고칠 수 있게 열어 두었다
+   (환율 파일에 그 통화 값이 없거나 · 파일을 못 읽었거나 · 실제 적용 환율이 다를 때 BU Admin 확인 후 입력 — 배너 안내 문구).
+   그런데 결재선 금액 조건(RD · CFO ≥ 20,000,000)이 그 입력 환율 환산 금액을 그대로 써서, 환율을 낮추면 RD · CFO 단계가 빠졌다.
+   - 입력 환율은 그대로 저장한다(ExchangeRate · 금액 표시 · 원가) — 업무상 필요한 수정은 막지 않는다.
+   - 결재선은 「기준 환율(acc_voucher_exchange.xlsx · 배너와 같은 값) 환산 금액」과 「입력 환율 환산 금액」 중 큰 쪽으로 정한다.
+     → 환율을 낮춰도 결재선이 낮아지지 않고, 높이면 화면의 KRW 금액대로 결재선이 잡힌다.
+   - 기준 환율을 Remarks 끝에 「RefRate:통화=값」(그 통화 값이 없으면 「RefRate:통화=NONE」)으로 함께 남긴다 — 새 열 없이.
+     화면 · 공식 양식의 Remarks 표시는 remarkTokens() 로 이 꼬리를 뺀다(체크박스 4종 판정은 원래 includes 라 영향 없음).
+   - 상세 화면은 저장 환율이 기준 환율과 다르면 「기준 환율 대비 차이」, 기준 환율이 없었으면 「기준 환율 없음」 을 보인다.
+     RefRate 가 없는 지난 신청은 환율 파일에서 제출일(KST) 기준 값을 찾아 비교한다(파일 읽기와 같은 규칙).
+   기준 환율이 그 통화에 없으면 예전처럼 입력 환율로 정한다. 브라우저 계산이라 서버(흐름)에서 다시 계산하는 것이 근본 대책. */
+const REFRATE_TAG = 'RefRate:';
+function officialExRate(cur){ const r = window._cachedExRates ? Number(window._cachedExRates[cur]) : 0; return r>0 ? r : 0; }
+function approvalBasisKRW(){
+  const cur = getSelectedCurrency();
+  const entered = totalAmountKRW();
+  if(cur==='KRW') return entered;
+  const ref = officialExRate(cur);
+  return ref ? Math.max(entered, Math.round(goodsTotalOf(goodsLines, cur)*ref)) : entered;
+}
+function _rateDiffers(a, b){ return Math.abs((Number(a)||0)-(Number(b)||0)) > 0.00005; }
+function _fmtRate(n){ return (Number(n)||0).toLocaleString('en-US',{maximumFractionDigits:4}); }
+// Remarks 표시용 — 「RefRate:…」 꼬리를 뺀 원래 선택 항목들
+function remarkTokens(remarks){ return String(remarks||'').split(';').map(s=>s.trim()).filter(s=>s && s.indexOf(REFRATE_TAG)!==0); }
+function refRateFromRemarks(remarks){
+  const t = String(remarks||'').split(';').map(s=>s.trim()).find(s=>s.indexOf(REFRATE_TAG)===0);
+  if(!t) return null;
+  const m = t.slice(REFRATE_TAG.length).match(/^([A-Za-z]{3})=(.+)$/);
+  if(!m) return null;
+  const r = parseFloat(m[2]);
+  return { cur:m[1].toUpperCase(), rate: r>0 ? r : 0 };
+}
+function refRateOnDate(cur, dateStr){
+  const hist = window._exRateHist; if(!hist || !dateStr) return 0;
+  let best = null;
+  hist.forEach(r=>{ if(r.currency===cur && r.rate>0 && r.date<=dateStr && (!best || r.date>best.date)) best = r; });
+  return best ? best.rate : 0;
+}
+// 상세 · 목록 판정 — null(문제 없음 · 판단 불가) | {kind:'none', saved} | {kind:'diff', ref, saved, legacy, refKRW, savedKRW}
+function exRateCheck(v){
+  if(!v) return null;
+  const cur = String(v.Currency||'KRW').toUpperCase();
+  if(cur==='KRW') return null;
+  const saved = parseFloat(v.ExchangeRate)||0;
+  const tok = refRateFromRemarks(v.Remarks);
+  let ref = 0, legacy = false;
+  if(tok && tok.cur===cur){
+    if(!tok.rate) return { kind:'none', saved };
+    ref = tok.rate;
+  } else {
+    let ds = '';
+    try { ds = v.SubmittedDate ? new Date(new Date(v.SubmittedDate).getTime()+9*3600*1000).toISOString().slice(0,10) : ''; } catch(e){ ds = ''; }
+    ref = refRateOnDate(cur, ds); legacy = true;
+    if(!ref) return null;
+  }
+  if(!_rateDiffers(saved, ref)) return null;
+  let goods = []; try { goods = JSON.parse(v.GoodsJSON||'[]'); } catch(e){}
+  const orig = goodsTotalOf(Array.isArray(goods)?goods:[], cur);
+  return { kind:'diff', ref, saved, legacy, refKRW: Math.round(orig*ref), savedKRW: Math.round(orig*saved) };
+}
+// 상세 「기준 환율 대비 차이」 줄 — 정상(같은 환율 · KRW)이면 빈 문자열이라 화면이 바뀌지 않는다
+function exRateWarnHtml(v){
+  const c = exRateCheck(v); if(!c) return '';
+  let lbl, body;
+  if(c.kind==='none'){
+    lbl = '기준 환율';
+    body = `<span style="color:#a4262c;font-weight:600">⚠ 기준 환율 없음</span><br><span style="font-size:.72rem;color:#605e5c">제출 때 환율 파일에서 ${escHtml(v.Currency)} 기준 환율을 찾지 못해(값 없음 · 읽기 실패) 신청자가 입력한 환율(${escHtml(_fmtRate(c.saved))})로 결재선을 정했습니다. 환율을 확인해 주세요.</span>`;
+  } else {
+    const pct = (c.saved - c.ref) / c.ref * 100;
+    lbl = '기준 환율 대비 차이';
+    body = `<span style="color:#a4262c;font-weight:600">⚠ 입력 환율 ${escHtml(_fmtRate(c.saved))} · 기준 환율 ${escHtml(_fmtRate(c.ref))} (${pct>0?'+':''}${pct.toFixed(2)}%)</span><br><span style="font-size:.72rem;color:#605e5c">기준 환율 환산 ≈ ${c.refKRW.toLocaleString()} KRW · 입력 환율 환산 ≈ ${c.savedKRW.toLocaleString()} KRW${c.legacy?' · 제출일 환율 파일 기준':''}</span>`;
+  }
+  return `<div class="det-row"><div class="det-lbl">${lbl}</div><div class="det-val" id="exrate-warn">${body}</div></div>`;
+}
+// 결재함 · 관리자 목록 금액 칸의 ⚠ 표시
+function exRateFlag(v){
+  const c = exRateCheck(v); if(!c) return '';
+  const tip = c.kind==='none' ? '기준 환율 없음 — 신청자 입력 환율로 결재선을 정함' : '기준 환율 대비 차이 — 입력 '+_fmtRate(c.saved)+' · 기준 '+_fmtRate(c.ref);
+  return ` <span title="${escHtml(tip)}" style="color:#a4262c;font-weight:700;cursor:help">⚠</span>`;
+}
+// 신청 화면 결재 라인 아래 안내 — 입력 환율이 기준과 다르거나 기준이 없을 때만
+function exRateFormNote(){
+  const cur = getSelectedCurrency(); if(cur==='KRW') return '';
+  const ref = officialExRate(cur), ent = getSelectedExRate();
+  if(!ref) return `<div style="font-size:11px;color:#a4262c;margin-top:4px">⚠ 기준 환율(${escHtml(cur)})을 찾지 못해 입력한 환율로 결재선을 정합니다 — 결재 화면에 「기준 환율 없음」 으로 표시됩니다.</div>`;
+  if(!_rateDiffers(ent, ref)) return '';
+  return `<div style="font-size:11px;color:#a4262c;margin-top:4px">⚠ 입력 환율(${escHtml(_fmtRate(ent))})이 기준 환율(${escHtml(_fmtRate(ref))})과 다릅니다 — 결재선은 두 환율 환산 금액 중 큰 쪽(≈ ${approvalBasisKRW().toLocaleString()} KRW)으로 정하고, 결재 화면에 차이가 표시됩니다.</div>`;
+}
 function buildApprovers(){
   const rules = APPROVAL_RULES.PR;
   const cfg = _sysConfig||{};
@@ -2053,7 +2146,7 @@ function buildApprovers(){
   const BC   = cfgVal(cfg,'CTR_PR_BC',{name:'',email:''});
   const CM   = cfgVal(cfg,'CTR_PR_CM',{name:'',email:''});
   const CFO  = cfgVal(cfg,'CTR_PR_CFO',{name:'',email:''});
-  const amt = totalAmountKRW();
+  const amt = approvalBasisKRW();   // 환율을 낮춰 RD · CFO 가 빠지지 않게 — 기준 환율 환산과 입력 환율 환산 중 큰 쪽(10-10)
   const apLine=[];
   if(needed(rules.TL, amt)) apLine.push({fixed:false, role:'TL', label:'Team Leader'});
   if(needed(rules.DH, amt)) apLine.push({fixed:false, role:'DH', label:'Department Head'});
@@ -2127,7 +2220,7 @@ function renderApprovalPreview(){
     approvers.map((a,i)=>
       `<span class="line-step"><span class="line-step-badge ${a.fixed?'fixed':''}">${a.order}차</span><span class="line-step-label">${a.label}</span>${i<approvers.length-1?'<span class="line-arrow">→</span>':''}</span>`
     ).join('')+
-    `</div>`;
+    `</div>`+exRateFormNote();
 
   const _flex = flexForRender(approvers);   // Flex 연동 결재자(TL · DH) 판정 — 못 찾은 역할은 이력에 한 번 남긴다
   el.innerHTML = approvers.map(a=>{
@@ -2164,15 +2257,15 @@ function renderApprovalPreview(){
       <div class="appr-select-row">
         <select id="ctr${a.order}-dept" onchange="ctrDeptChange('${a.role}',${a.order})" ${employeeData.length?'':'disabled'}>
           <option value="">부서${employeeData.length?'':' (로딩중...)'}</option>
-          ${depts.map(d=>`<option value="${escAttr(d)}" ${d===st.dept?'selected':''}>${d}</option>`).join('')}
+          ${depts.map(d=>`<option value="${escAttr(d)}" ${d===st.dept?'selected':''}>${escHtml(d)}</option>`).join('')}
         </select>
         <select id="ctr${a.order}-team" onchange="ctrTeamChange('${a.role}',${a.order})" ${st.dept?'':'disabled'}>
           <option value="">팀</option>
-          ${teams.map(t=>`<option value="${escAttr(t)}" ${t===st.team?'selected':''}>${t}</option>`).join('')}
+          ${teams.map(t=>`<option value="${escAttr(t)}" ${t===st.team?'selected':''}>${escHtml(t)}</option>`).join('')}
         </select>
         <select id="ctr${a.order}-person" onchange="ctrPersonChange('${a.role}',${a.order})" ${st.team?'':'disabled'}>
           <option value="">직원 선택</option>
-          ${persons.map(p=>`<option value="${escAttr(p.email)}" ${p.email===st.email?'selected':''}>${p.name}</option>`).join('')}
+          ${persons.map(p=>`<option value="${escAttr(p.email)}" ${p.email===st.email?'selected':''}>${escHtml(p.name)}</option>`).join('')}
         </select>
       </div>
       <div class="appr-info">
@@ -2279,6 +2372,8 @@ async function savePR(status){
     }
   }
 
+  // 기준 환율을 아직 못 읽었으면(부팅 직후 · 일시 오류) 한 번 더 읽는다 — 결재선 금액 기준(10-10)
+  { const _c0 = getSelectedCurrency(); if(_c0!=='KRW' && !officialExRate(_c0)){ try{ await loadExchangeRates(); }catch(e){} } }
   const approvers = buildApprovers();
   if(status==='대기'){
     const missing = approvers.filter(a=>!a.email);
@@ -2305,6 +2400,8 @@ async function savePR(status){
   const accTotal = sumAmt(accLines, _cur);
   const _rate = getSelectedExRate();
   const accTotalKRW = _cur==='KRW' ? accTotal : Math.round(accTotal*_rate);
+  // 외화면 그때의 기준 환율을 Remarks 끝에 남긴다(새 열 없이) — 상세의 「기준 환율 대비 차이」 판정용(10-10)
+  if(_cur!=='KRW'){ const _ref = officialExRate(_cur); remarks.push(REFRATE_TAG+_cur+'='+(_ref ? String(_ref) : 'NONE')); }
 
   const fields = {
     Title: prId,
@@ -2550,11 +2647,11 @@ async function loadMyList(){
       .map(it=>({...it.fields, _spId:it.id}))
       .sort((a,b)=>b._spId-a._spId);
     renderList();
-  } catch(e){ tbody.innerHTML='<tr><td colspan="10" class="list-empty">'+e.message+'</td></tr>'; }
+  } catch(e){ tbody.innerHTML='<tr><td colspan="10" class="list-empty">'+escHtml(e.message)+'</td></tr>'; }
 }
 function _wdBtnList(spId, status){
   if(status!=='대기') return '';
-  return `<button onclick="event.stopPropagation();confirmWithdraw('${spId}')" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:2px 12px;font-size:.75rem;line-height:16px;cursor:pointer;font-family:inherit;white-space:nowrap;">Withdraw</button>`;
+  return `<button onclick="event.stopPropagation();confirmWithdraw('${_idq(spId)}')" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:2px 12px;font-size:.75rem;line-height:16px;cursor:pointer;font-family:inherit;white-space:nowrap;">Withdraw</button>`;
 }
 // ── 목록용 공통 헬퍼: G/L Acc.No. / Cost Center 요약 표시, 신청일(날짜+시간) ──
 // ── 결재함/관리자 목록용: G/L Acc.No. / G/L Acc.Description / Cost Center를 개별 컬럼으로 분리 ──
@@ -2595,15 +2692,15 @@ function renderList(){
     const p = _glCcParts(v);
     const b = _amountBreakdown(v);
     return `
-    <tr onclick="openDetail('${v._spId}','list')">
+    <tr onclick="openDetail('${_idq(v._spId)}','list')">
       <td style="text-align:center;color:#0078d4;font-weight:600">${list.length-idx}</td>
-      <td>${v.Title||'-'}</td>
-      <td>${v.PurchaseCategory||'-'}</td>
-      <td style="font-size:11px;color:#605e5c">${p.gl}${p.extra>0?' 외 '+p.extra+'건':''}</td>
-      <td style="font-size:11px;color:#605e5c">${p.cctr}</td>
+      <td>${escHtml(v.Title||'-')}</td>
+      <td>${escHtml(v.PurchaseCategory||'-')}</td>
+      <td style="font-size:11px;color:#605e5c">${escHtml(p.gl)}${p.extra>0?' 외 '+p.extra+'건':''}</td>
+      <td style="font-size:11px;color:#605e5c">${escHtml(p.cctr)}</td>
       <td style="text-align:right">${b.exclKRW.toLocaleString()}</td>
       <td style="text-align:right">${b.vatKRW>0?b.vatKRW.toLocaleString():'-'}</td>
-      <td><span class="badge-${(v.Status||'').replace(/[()]/g,'')}">${v.Status||'-'}</span></td>
+      <td><span class="badge-${escHtml((v.Status||'').replace(/[()]/g,''))}">${escHtml(v.Status||'-')}</span></td>
       <td style="font-size:11px;color:#605e5c;white-space:nowrap">${_appliedDateTime(v)}</td>
       <td style="text-align:center;vertical-align:middle" onclick="event.stopPropagation()">${_wdBtnList(v._spId, v.Status)}</td>
     </tr>`;
@@ -2651,7 +2748,7 @@ async function loadApprovalQueue(){
     renderApprovalQueue();
     const badge = document.getElementById('appr-badge');
     if(badge){ badge.textContent = apprQueueCache.length; badge.style.display = apprQueueCache.length ? 'inline-block' : 'none'; }
-  } catch(e){ tbody.innerHTML='<tr><td colspan="11" class="list-empty">'+e.message+'</td></tr>'; }
+  } catch(e){ tbody.innerHTML='<tr><td colspan="11" class="list-empty">'+escHtml(e.message)+'</td></tr>'; }
 }
 function renderApprovalQueue(){
   const tbody = document.getElementById('appr-body');
@@ -2660,20 +2757,20 @@ function renderApprovalQueue(){
     const p = _glCcParts(a._req);
     const b = _amountBreakdown(a._req);
     return `
-    <tr onclick="openDetail('${a.RequestID}','appr')">
+    <tr onclick="openDetail('${_idq(a.RequestID)}','appr')">
       <td style="text-align:center;color:#0078d4;font-weight:600">${idx+1}</td>
-      <td>${a._req.Title||'-'}</td>
-      <td>${a._req.PurchaseCategory||'-'}</td>
-      <td style="font-size:11px;color:#605e5c">${p.gl}${p.extra>0?' 외 '+p.extra+'건':''}</td>
-      <td style="font-size:11px;color:#605e5c">${p.cctr}</td>
-      <td class="req" style="font-size:12px" title="${a._req.RequesterEmail||''}">${a._req.RequesterEmail||'-'}</td>
-      <td style="text-align:right">${b.exclKRW.toLocaleString()}</td>
+      <td>${escHtml(a._req.Title||'-')}</td>
+      <td>${escHtml(a._req.PurchaseCategory||'-')}</td>
+      <td style="font-size:11px;color:#605e5c">${escHtml(p.gl)}${p.extra>0?' 외 '+p.extra+'건':''}</td>
+      <td style="font-size:11px;color:#605e5c">${escHtml(p.cctr)}</td>
+      <td class="req" style="font-size:12px" title="${escHtml(a._req.RequesterEmail||'')}">${escHtml(a._req.RequesterEmail||'-')}</td>
+      <td style="text-align:right">${b.exclKRW.toLocaleString()}${exRateFlag(a._req)}</td>
       <td style="text-align:right">${b.vatKRW>0?b.vatKRW.toLocaleString():'-'}</td>
-      <td><span class="badge-${(a.Status||'').replace(/[()]/g,'')}">${a.Status||'-'}</span></td>
+      <td><span class="badge-${escHtml((a.Status||'').replace(/[()]/g,''))}">${escHtml(a.Status||'-')}</span></td>
       <td style="font-size:11px;color:#605e5c;white-space:nowrap">${_appliedDateTime(a._req)}</td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
-        <button class="btn-primary" style="padding:3px 10px;font-size:.72rem;background:#107c10" onclick="showApprConfirm(${a._apId},'승인',${a.RequestID})">승인</button>
-        <button class="btn-danger" style="padding:3px 10px;font-size:.72rem" onclick="showApprConfirm(${a._apId},'반려',${a.RequestID})">반려</button>
+        <button class="btn-primary" style="padding:3px 10px;font-size:.72rem;background:#107c10" onclick="showApprConfirm(${_idq(a._apId)},'승인',${_idq(a.RequestID)})">승인</button>
+        <button class="btn-danger" style="padding:3px 10px;font-size:.72rem" onclick="showApprConfirm(${_idq(a._apId)},'반려',${_idq(a.RequestID)})">반려</button>
       </td>
     </tr>`;
   }).join('');
@@ -2793,20 +2890,21 @@ async function openDetail(spId, fromTab){
         driveId = decoded.substring(0, sepIdx);
         itemId = decoded.substring(sepIdx+3);
       }catch(e){}
-      return `<div style="padding:4px 0;font-size:.8rem"><a href="#" class="file-dl-link" data-drive="${encodeURIComponent(driveId)}" data-id="${encodeURIComponent(itemId)}" data-name="${encodeURIComponent(name)}" style="color:#0078d4;cursor:pointer;text-decoration:none">📎 ${name}</a></div>`;
+      return `<div style="padding:4px 0;font-size:.8rem"><a href="#" class="file-dl-link" data-drive="${encodeURIComponent(driveId)}" data-id="${encodeURIComponent(itemId)}" data-name="${encodeURIComponent(name)}" style="color:#0078d4;cursor:pointer;text-decoration:none">📎 ${escHtml(name)}</a></div>`;
     }).join('');
   }
 
   let apprHtml = '<div style="text-align:center;color:#a19f9d;padding:10px">불러오는 중...</div>';
   document.getElementById('detail-body').innerHTML = `
     <div class="det-sec">기본 정보</div>
-    <div class="det-row"><div class="det-lbl">PR ID</div><div class="det-val"><span style="font-weight:700">${v.Title||'-'}</span></div></div>
-    <div class="det-row"><div class="det-lbl">Purchase Category</div><div class="det-val">${v.PurchaseCategory||'-'}</div></div>
-    <div class="det-row"><div class="det-lbl">Requester</div><div class="det-val">${v.RequesterEmail||'-'}</div></div>
-    <div class="det-row"><div class="det-lbl">Department / Cost Center</div><div class="det-val">${v.Department||'-'} / ${v.CostCenter||'-'}</div></div>
+    <div class="det-row"><div class="det-lbl">PR ID</div><div class="det-val"><span style="font-weight:700">${escHtml(v.Title||'-')}</span></div></div>
+    <div class="det-row"><div class="det-lbl">Purchase Category</div><div class="det-val">${escHtml(v.PurchaseCategory||'-')}</div></div>
+    <div class="det-row"><div class="det-lbl">Requester</div><div class="det-val">${escHtml(v.RequesterEmail||'-')}</div></div>
+    <div class="det-row"><div class="det-lbl">Department / Cost Center</div><div class="det-val">${escHtml(v.Department||'-')} / ${escHtml(v.CostCenter||'-')}</div></div>
     <div class="det-row"><div class="det-lbl">제출일</div><div class="det-val">${v.SubmittedDate ? new Date(new Date(v.SubmittedDate).getTime()+9*3600*1000).toISOString().slice(0,10) : '-'}</div></div>
-    ${(v.Currency && v.Currency!=='KRW') ? `<div class="det-row"><div class="det-lbl">Currency / Exchange Rate</div><div class="det-val">${v.Currency} / ${v.ExchangeRate||'-'}</div></div>` : ''}
-    <div class="det-row"><div class="det-lbl">상태</div><div class="det-val"><span class="badge-${(v.Status||'').replace(/[()]/g,'')}">${v.Status||'-'}</span></div></div>
+    ${(v.Currency && v.Currency!=='KRW') ? `<div class="det-row"><div class="det-lbl">Currency / Exchange Rate</div><div class="det-val">${escHtml(v.Currency)} / ${escHtml(v.ExchangeRate||'-')}</div></div>` : ''}
+    ${exRateWarnHtml(v)}
+    <div class="det-row"><div class="det-lbl">상태</div><div class="det-val"><span class="badge-${escHtml((v.Status||'').replace(/[()]/g,''))}">${escHtml(v.Status||'-')}</span></div></div>
 
     <div class="det-sec">Description of Goods</div>
     ${(()=>{
@@ -2904,23 +3002,31 @@ async function openDetail(spId, fromTab){
     const ROLE_LABELS = {TL:'Team Leader', DH:'Department Head', CEO:'CEO', RD:'RD', BC:'Budget Controller', CM:'Controlling Manager', CFO:'CFO'};
     document.getElementById('detail-appr-list').innerHTML = items.map(a=>{
       return `<div class="appr-item"><div>
-        <div><b>${a.ApprovalOrder}차 결재자(${ROLE_LABELS[aacRoleBase(a.ApproverRole)]||aacRoleBase(a.ApproverRole)})</b>${aacRolePill(a.ApproverRole, a.Status)}</div>
+        <div><b>${escHtml(a.ApprovalOrder)}차 결재자(${escHtml(ROLE_LABELS[aacRoleBase(a.ApproverRole)]||aacRoleBase(a.ApproverRole))})</b>${aacRolePill(a.ApproverRole, a.Status)}</div>
         <div style="font-size:.72rem;color:#605e5c">${escH(a.ApproverName||'-')} · ${escH(a.ApproverEmail||'')}</div>
         ${a.ApprovalDate?`<div style="font-size:.72rem;color:#a19f9d;margin-top:1px" data-appr-date>${fmtApprTime(a.ApprovalDate)}</div>`:''}
         ${a.Comment?`<div style="font-size:.72rem;background:#fff;border:1px solid #edebe9;border-radius:4px;padding:2px 6px;display:inline-block;margin-top:2px">💬 ${safeText(a.Comment)}</div>`:''}
-      </div><div class="status-${(a.Status||'').replace(/[()]/g,'')}">${a.Status||'-'}</div></div>`;
+      </div><div class="status-${escHtml((a.Status||'').replace(/[()]/g,''))}">${escHtml(a.Status||'-')}</div></div>`;
     }).join('');
+
+    // 기준 환율 금액이면 필요한 결재 단계가 결재선에 없는지(10-10) — 지난 신청 · 조작된 환율 확인용
+    { const _xc = exRateCheck(v), _wl = document.getElementById('exrate-warn');
+      if(_xc && _xc.kind==='diff' && _wl && items.length){
+        const _rules = APPROVAL_RULES.PR, _have = new Set(items.map(a=>aacRoleBase(a.ApproverRole)));
+        const _miss = Object.keys(_rules).filter(r=>r!=='CEO' && needed(_rules[r], Math.max(_xc.refKRW, _xc.savedKRW)) && !_have.has(r));
+        if(_miss.length) _wl.insertAdjacentHTML('beforeend', '<br><span style="font-size:.72rem;color:#a4262c;font-weight:600">기준 환율 금액이면 필요한 결재 단계가 결재선에 없습니다: '+escHtml(_miss.map(r=>ROLE_LABELS[r]||r).join(', '))+'</span>');
+      } }
 
     // 내 결재 대기 건이면 ACC Voucher와 동일하게 결재 이력 아래에 승인/반려 버튼 한 세트만 표시
     const myPendingItem = apprData.value.find(x=>x.fields.Status==='대기' && isMyAppr(x.fields.ApproverEmail));
     const btnWrap = document.getElementById('detail-appr-action-btns');
     if(btnWrap){
       btnWrap.innerHTML = myPendingItem
-        ? `<div class="modal-action"><button class="btn-approve" onclick="showApprConfirm(${myPendingItem.id},'승인',${v._spId})">✅ 승인</button><button class="btn-reject" onclick="showApprConfirm(${myPendingItem.id},'반려',${v._spId})">❌ 반려</button></div>`
+        ? `<div class="modal-action"><button class="btn-approve" onclick="showApprConfirm(${_idq(myPendingItem.id)},'승인',${_idq(v._spId)})">✅ 승인</button><button class="btn-reject" onclick="showApprConfirm(${_idq(myPendingItem.id)},'반려',${_idq(v._spId)})">❌ 반려</button></div>`
         : '';
     }
   } catch(e){
-    document.getElementById('detail-appr-list').innerHTML = '<div style="color:#a4262c">결재 이력 로드 실패: '+e.message+'</div>';
+    document.getElementById('detail-appr-list').innerHTML = '<div style="color:#a4262c">결재 이력 로드 실패: '+escHtml(e.message)+'</div>';
   }
 }
 function closeDetailModal(){ document.getElementById('detail-modal').classList.remove('open'); }
@@ -2935,7 +3041,7 @@ async function loadAdminList(){
     const data = await apiAll(`${GRAPH}/sites/${siteId}/lists/${LIST_REQUESTS}/items?$expand=fields&$top=999`);
     adminListCache = data.value.map(it=>({...it.fields,_spId:it.id})).sort((a,b)=>b._spId-a._spId);
     renderAdminList();
-  } catch(e){ tbody.innerHTML='<tr><td colspan="10" class="list-empty">'+e.message+'</td></tr>'; }
+  } catch(e){ tbody.innerHTML='<tr><td colspan="10" class="list-empty">'+escHtml(e.message)+'</td></tr>'; }
 }
 function renderAdminList(){
   const st = document.getElementById('admin-f-status').value;
@@ -2949,16 +3055,16 @@ function renderAdminList(){
     const p = _glCcParts(v);
     const b = _amountBreakdown(v);
     return `
-    <tr onclick="openDetail('${v._spId}','admin')">
+    <tr onclick="openDetail('${_idq(v._spId)}','admin')">
       <td style="text-align:center;color:#0078d4;font-weight:600">${list.length-idx}</td>
-      <td>${v.Title||'-'}</td>
-      <td>${v.PurchaseCategory||'-'}</td>
-      <td style="font-size:11px;color:#605e5c">${p.gl}${p.extra>0?' 외 '+p.extra+'건':''}</td>
-      <td style="font-size:11px;color:#605e5c">${p.cctr}</td>
-      <td class="req" style="font-size:12px" title="${v.RequesterEmail||''}">${v.RequesterEmail||'-'}</td>
-      <td style="text-align:right">${b.exclKRW.toLocaleString()}</td>
+      <td>${escHtml(v.Title||'-')}</td>
+      <td>${escHtml(v.PurchaseCategory||'-')}</td>
+      <td style="font-size:11px;color:#605e5c">${escHtml(p.gl)}${p.extra>0?' 외 '+p.extra+'건':''}</td>
+      <td style="font-size:11px;color:#605e5c">${escHtml(p.cctr)}</td>
+      <td class="req" style="font-size:12px" title="${escHtml(v.RequesterEmail||'')}">${escHtml(v.RequesterEmail||'-')}</td>
+      <td style="text-align:right">${b.exclKRW.toLocaleString()}${exRateFlag(v)}</td>
       <td style="text-align:right">${b.vatKRW>0?b.vatKRW.toLocaleString():'-'}</td>
-      <td><span class="badge-${(v.Status||'').replace(/[()]/g,'')}">${v.Status||'-'}</span></td>
+      <td><span class="badge-${escHtml((v.Status||'').replace(/[()]/g,''))}">${escHtml(v.Status||'-')}</span></td>
       <td style="font-size:11px;color:#605e5c;white-space:nowrap">${_appliedDateTime(v)}</td>
     </tr>`;
   }).join('');
@@ -2979,7 +3085,7 @@ async function exportAdminExcel(){
 
 // ── 공식 PDF 양식 ──
 function buildOfficialPRHTML(v, goods, accL, apprList){
-  const esc = s => (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const esc = s => escHtml(s);   // 화면과 같은 함수(따옴표까지)(10-10)
   const fmtK = n => Math.round(n||0).toLocaleString('ko-KR');
   const cellB='border:1px solid #000;padding:4px 6px;font-size:10.5px';
   const lblB=cellB+';background:#f0f0f0;font-weight:600;white-space:nowrap';
@@ -3042,7 +3148,7 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
     <div style="text-align:center;font-weight:700;font-size:16px;border:2px solid #000;border-bottom:none;padding:8px">Star Truck Korea Co., Ltd.</div>
     <div style="text-align:center;font-weight:600;font-size:12px;border:2px solid #000;border-top:none;padding:6px">Purchase Requisition</div>
     <table style="width:100%;border-collapse:collapse;border:1px solid #000;border-top:none">
-      <tr><td style="${lblB}">Submission Date</td><td style="${cellB}">${fmtDT(v.SubmittedDate)}</td>
+      <tr><td style="${lblB}">Submission Date</td><td style="${cellB}">${esc(fmtDT(v.SubmittedDate))}</td>
           <td style="${lblB}">Purchase Category</td><td style="${cellB}">${esc(v.PurchaseCategory)}</td>
           <td style="${lblB}">Currency</td><td style="${cellB}">${esc(v.Currency||'KRW')}${(v.Currency&&v.Currency!=='KRW')?' (환율 '+esc(v.ExchangeRate)+')':''}</td></tr>
     </table>
@@ -3084,7 +3190,7 @@ function buildOfficialPRHTML(v, goods, accL, apprList){
       <tr><td colspan="5" style="${cellB};text-align:right;font-weight:700">${hasVatLine?'TOTAL (Excl. VAT)':'TOTAL'}</td><td style="${cellB};text-align:right;font-weight:700">${fmtC(roundCur(accTotal-accVat, _pc))}</td></tr>
     </table>
     <div style="font-weight:700;font-size:11px;margin-top:8px;border:1px solid #000;padding:4px 6px;background:#f0f0f0">Remarks</div>
-    <div style="border:1px solid #000;border-top:none;padding:6px 8px;font-size:10.5px">${esc((v.Remarks||'').split(';').filter(Boolean).join(', ')||'-')}</div>
+    <div style="border:1px solid #000;border-top:none;padding:6px 8px;font-size:10.5px">${esc(remarkTokens(v.Remarks).join(', ')||'-')}</div>
     <div style="font-weight:700;font-size:11px;margin-top:8px;border:1px solid #000;padding:4px 6px;background:#f0f0f0">Authorization</div>
     <table style="width:100%;border-collapse:collapse;border:1px solid #000;border-top:none;table-layout:fixed">
       <!-- col 개수를 roleCols 길이에 맞춰 생성한다. 하드코딩하면 결재 역할이 늘거나 줄 때
