@@ -1306,7 +1306,7 @@ async function loadEmployees(){
     const buf=await res.arrayBuffer();
     const wb=XLSX.read(buf,{type:'array'});
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-    employeeData=rows.map(r=>({dept:r['Department']||'',team:r['Team']||'',name:r['EngName']||'',email:(r['EMail']||r['email']||''),boss:String(r['Boss']||'').trim(),boss2:String(r['Boss of Boss']||'').trim()})).filter(r=>r.email&&r.name);   // boss = G열 팀장 · boss2 = H열 부서장 (Flex 연동 결재자, 10-01)
+    employeeData=rows.map(r=>({dept:r['Department']||'',team:r['Team']||'',name:r['EngName']||'',email:(r['EMail']||r['email']||''),boss:String(r['Boss']||'').trim(),boss2:String(r['Boss of Boss']||'').trim(),orgTm:String(r['Team Manager']||'').trim(),orgDh:String(r['Department Head']||'').trim(),orgRd:String(r['RD']||'').trim()})).filter(r=>r.email&&r.name);   // boss = G열 팀장 · boss2 = H열 부서장 (Flex 연동 결재자, 10-01) · orgTm/orgDh/orgRd = I·J·K 열 조직도 고정 직책(10-14)
     console.log('[employee_search] 로드 완료:', employeeData.length);
     renderApprovalPreview(); // 이미 그려진 드롭다운이 있으면 옵션 채워서 다시 그림
   }catch(e){ console.warn('직원 데이터 로드 실패:', e.message); }
@@ -2183,16 +2183,33 @@ function buildApprovers(){
 /* ══ Flex 연동 결재자 (10-01) ══
    직접 선택하던 Team Leader · Department Head 를 employee_search.xlsx(Flex 조직도)에서 자동으로 정한다 — G열 Boss = 팀장, H열 Boss of Boss = 부서장.
    설정 파일(CTR_PR_*)로 정하는 자동 지정 결재자(RD · BC · CM · CFO · CEO)는 그대로.
+   · 10-14: 명부에 I·J·K 열(Team Manager · Department Head · RD)이 있으면 그 고정 직책으로 정한다(flexOrgPick) — 팀장 신청 = 본인 → 본부장.
    · 신청자(로그인 계정)를 EMail 열에서 찾고, Boss / Boss of Boss 의 이름(EngName)을 명부에서 다시 찾아 이메일을 얻는다.
    · 부서장(H)이 '-' 이면(본부장 본인 신청) G(직속 상사 = 대표)를 부서장으로 본다. 같은 사람이 두 단계에 올 수 있다.
    · 신청자가 명부에 없거나 상사 이름을 못 찾으면 예전처럼 직접 선택 드롭다운을 열어 두고 안내를 띄운다(차단하지 않음) — Logging_data 에 남긴다.
    입력칸(dyn-TL/DH-name · -email)과 buildApprovers 는 그대로 — 값만 자동으로 채운 읽기 전용 블록으로 그린다. */
 function flexNorm(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
 function flexByName(name){ const k=flexNorm(name); if(!k||k==='-') return null; return employeeData.find(e=>flexNorm(e.name)===k)||null; }
+/* 조직도 3열(10-14) — I열 Team Manager · J열 Department Head · K열 RD (값은 EngName, 없으면 '-').
+   Boss / Boss of Boss 는 신청자 기준 상대값이라, 팀장이 올리면 Department Head 단계에 RD 가 들어가던 것을 바로잡는다.
+   · Team Leader 단계 = Team Manager, '-' 이면 Department Head, 그것도 '-' 이면 RD. Department Head 단계 = Department Head, '-' 이면 RD.
+   · 신청자 본인이 그 단계 결재자이면 본인이 결재한다(건너뛰거나 위로 올리지 않음). 두 단계가 같은 사람이면 지금처럼 두 번.
+   · 그 사람 행의 세 칸이 모두 비었으면(새 열 없는 명부 · HFS 반영 전) null — 아래 Boss / Boss of Boss 규칙 그대로(fail-safe).
+   · RD(CTR_PR_RD) · BC · CM · CFO 자동 지정 단계는 그대로 — 대표 본인 신청이면 TL · DH · RD 가 모두 대표가 된다(결정 필요로 보고). */
+function flexOrgPick(rec){
+  if(!rec || !(rec.orgTm||rec.orgDh||rec.orgRd)) return null;
+  const v=x=>{ x=String(x||'').trim(); return x==='-' ? '' : x; };
+  const tm=v(rec.orgTm), dh=v(rec.orgDh), rd=v(rec.orgRd);
+  const dhName=dh||rd, dhCol=dh?'Department Head':'RD';
+  return {org:true, tlName: tm||dhName, tlCol: tm?'Team Manager':dhCol, dhName, dhCol};
+}
+function flexOrgWhy(r, key){ return (key==='tl'?r.tlCol:r.dhCol)+' 못 찾음('+((key==='tl'?r.tlName:r.dhName)||'')+')'; }
 function flexResolve(){
   const me=[user&&user.email, user&&user.username].map(flexNorm).filter(Boolean);
   const rec=employeeData.find(e=>me.includes(flexNorm(e.email)))||null;
   if(!rec) return {rec:null, tl:null, dh:null};
+  const o=flexOrgPick(rec);   // 조직도 3열이 있으면 그것으로(10-14)
+  if(o) return Object.assign({rec, tl:flexByName(o.tlName), dh:flexByName(o.dhName)}, o);
   return {rec, tl:flexByName(rec.boss), dh:flexByName(rec.boss2)||flexByName(rec.boss)};
 }
 let _flexNote = {};   // role(tl/dh) → 직접 선택으로 열린 이유(안내 문구)
@@ -2202,10 +2219,11 @@ function flexForRender(approvers){
   const r = flexResolve(); const why=[];
   [['TL','tl','팀장(Boss)'],['DH','dh','부서장(Boss of Boss)']].forEach(([role,key,what])=>{
     if(!approvers.some(a=>a.role===role) || r[key]) return;
+    if(r.org) what = key==='tl' ? '팀장('+r.tlCol+')' : '부서장('+r.dhCol+')';   // 새 열이면 그 열 이름(10-14)
     _flexNote[key] = r.rec
-      ? '⚠ Flex 명부(employee_search)에서 '+what+' 「'+((key==='tl'?r.rec.boss:(r.rec.boss2||r.rec.boss))||'(빈칸)')+'」 을(를) 찾지 못해 직접 선택합니다 — IT팀(stk_it@hyosung.com)에 알려주세요.'
+      ? '⚠ Flex 명부(employee_search)에서 '+what+' 「'+((r.org ? (key==='tl'?r.tlName:r.dhName) : (key==='tl'?r.rec.boss:(r.rec.boss2||r.rec.boss)))||'(빈칸)')+'」 을(를) 찾지 못해 직접 선택합니다 — IT팀(stk_it@hyosung.com)에 알려주세요.'
       : '⚠ 신청자 계정이 Flex 명부(employee_search)에 없어 결재자를 직접 선택합니다 — IT팀(stk_it@hyosung.com)에 알려주세요.';
-    why.push(role+': '+(r.rec ? (key==='tl' ? 'Boss 못 찾음('+(r.rec.boss||'')+')' : 'Boss of Boss 못 찾음('+(r.rec.boss2||'')+'/'+(r.rec.boss||'')+')') : '명부에 없음'));
+    why.push(role+': '+(r.rec ? r.org ? flexOrgWhy(r, key) : (key==='tl' ? 'Boss 못 찾음('+(r.rec.boss||'')+')' : 'Boss of Boss 못 찾음('+(r.rec.boss2||'')+'/'+(r.rec.boss||'')+')') : '명부에 없음'));
   });
   if(why.length && !flexForRender._logged){ flexForRender._logged=true; try{ logAction('CTR_PR','결재자 Flex 연동 실패',{ user:(user.email||user.username||''), reason: why.join(' · ') }); }catch(e){} }
   return {tl:r.tl, dh:r.dh};
