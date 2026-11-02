@@ -1872,7 +1872,7 @@ function onCurrencyChange(source){
   const cur = srcSel ? srcSel.value : 'KRW';
   const primary = document.getElementById('v-currency');
   if(primary) primary.value = cur;
-  if(cur!=='KRW' && window._cachedExRates && window._cachedExRates[cur]){
+  if(cur!=='KRW' && window._cachedExRates && window._exRateIsToday && window._cachedExRates[cur]){   // 11-02: 오늘 값일 때만
     const exEl = document.getElementById('v-exrate');
     if(exEl) exEl.value = window._cachedExRates[cur];
   } else if(cur==='KRW'){
@@ -1910,6 +1910,13 @@ function renderExRateBanner(){
   }
   const kst=new Date(new Date().getTime()+9*3600*1000);
   const today=kst.toISOString().slice(0,10);
+  if(!window._exRateIsToday){
+    // 11-02: 오늘 값 없음 → 노란 경고 · 값은 모두 - · 환율 칸은 비워 둠(BU Admin 확인 후 직접 입력)
+    const dash = ['EUR','USD','SGD','JPY','CNY'].map(c=>`<span><b>${c}</b> -</span>`).join('<span style="color:#d2d0ce;margin:0 4px">|</span>');
+    const warn = `<div style="background:#fff4e5;border:1px solid #f7c948;border-radius:4px;padding:8px 14px;margin-top:2px;margin-bottom:12px"><div style="margin-bottom:4px"><span style="color:#835c00;font-weight:600;font-size:12px">⚠️ ${today} 기준 환율 정보가 없습니다.</span><span style="font-size:11px;color:#a19f9d;margin-left:8px">BU Admin에게 문의해주세요.</span></div><div style="font-size:12px;color:#a19f9d">${dash}</div></div>`;
+    targets.forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=warn; });
+    return;
+  }
   const parts = ['EUR','USD','SGD','JPY','CNY'].map(c=>{
     const r = window._cachedExRates[c];
     return r ? `<span><b>${c}</b> ${Number(r).toLocaleString()}</span>` : '';
@@ -1942,8 +1949,14 @@ async function loadExchangeRates(){
     }
     const kst=new Date(new Date().getTime()+9*3600*1000);
     const today=kst.toISOString().slice(0,10);
+    /* 11-02: 화면 안내 · 자동 기입은 오늘(KST) 값만 — 오늘 값이 없으면 「오늘 기준 환율 정보가 없습니다」(ACC Voucher 와 같은 규칙).
+       예전에는 오늘 값이 없으면 직전 날짜 값을 쓰면서 배너에는 오늘 날짜를 찍어(11-02 에 10-31 값을 「2026-11-02 기준」) 오늘 환율처럼 보였다.
+       직전 날짜(0 이 아닌 값이 있는 가장 최근 날짜)는 화면에 보이지 않는 「기준」 으로만 남긴다 —
+       결재선 금액 판정(approvalBasisKRW · officialExRate, 10-10)과 Remarks 의 RefRate 가 계속 동작하도록. */
     let use=all.filter(r=>r.date===today && r.rate>0);
-    if(!use.length){ const past=[...new Set(all.filter(r=>r.date<today).map(r=>r.date))].sort(); const last=past[past.length-1]; if(last) use=all.filter(r=>r.date===last); }
+    window._exRateIsToday = use.length>0;
+    if(!use.length){ const past=[...new Set(all.filter(r=>r.date<today && r.rate>0).map(r=>r.date))].sort(); const last=past[past.length-1]; if(last) use=all.filter(r=>r.date===last && r.rate>0); }
+    window._exRateDate = use.length ? use[0].date : '';
     window._cachedExRates={};
     use.forEach(r=>{ window._cachedExRates[r.currency]=r.rate; });
     window._exRateHist = all.filter(r=>r.rate>0);   // 날짜별 전체 — 상세의 「기준 환율 대비 차이」(지난 신청)용(10-10)
@@ -2297,7 +2310,7 @@ function exRateFormNote(){
   const ref = officialExRate(cur), ent = getSelectedExRate();
   if(!ref) return `<div style="font-size:11px;color:#a4262c;margin-top:4px">⚠ 기준 환율(${escHtml(cur)})을 찾지 못해 입력한 환율로 결재선을 정합니다 — 결재 화면에 「기준 환율 없음」 으로 표시됩니다.</div>`;
   if(!_rateDiffers(ent, ref)) return '';
-  return `<div style="font-size:11px;color:#a4262c;margin-top:4px">⚠ 입력 환율(${escHtml(_fmtRate(ent))})이 기준 환율(${escHtml(_fmtRate(ref))})과 다릅니다 — 결재선은 두 환율 환산 금액 중 큰 쪽(≈ ${approvalBasisKRW().toLocaleString()} KRW)으로 정하고, 결재 화면에 차이가 표시됩니다.</div>`;
+  return `<div style="font-size:11px;color:#a4262c;margin-top:4px">⚠ 입력 환율(${escHtml(_fmtRate(ent))})이 기준 환율(${window._exRateIsToday ? '' : escHtml(window._exRateDate||'직전 날짜')+' · '}${escHtml(_fmtRate(ref))})과 다릅니다 — 결재선은 두 환율 환산 금액 중 큰 쪽(≈ ${approvalBasisKRW().toLocaleString()} KRW)으로 정하고, 결재 화면에 차이가 표시됩니다.</div>`;
 }
 function buildApprovers(){
   const rules = APPROVAL_RULES.PR;
